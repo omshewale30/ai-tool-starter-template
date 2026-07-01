@@ -1,0 +1,108 @@
+name: Deploy (dev)
+
+# Manual or on merge to main. Uses GitHub OIDC federation to authenticate to
+# Azure — no Azure passwords or publish profiles are stored as secrets.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
+permissions:
+  id-token: write # required for OIDC
+  contents: read
+
+env:
+  IMAGE_TAG: ${{ github.sha }}
+  # Public seed image so the first infra deploy succeeds before images exist.
+  BOOTSTRAP_IMAGE: mcr.microsoft.com/k8se/quickstart:latest
+
+jobs:
+  deploy:
+    name: Provision + deploy to dev
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Provision infrastructure (Bicep)
+        id: infra
+        env:
+          SQL_ADMIN_PASSWORD: ${{ secrets.SQL_ADMIN_PASSWORD }}
+          ADMIN_GROUP_ID: ${{ vars.ADMIN_GROUP_ID }}
+          AZURE_AI_FOUNDRY_ENDPOINT: ${{ vars.AZURE_AI_FOUNDRY_ENDPOINT }}
+        run: |
+          set -euo pipefail
+          DEPLOYMENT="deploy-dev-${{ github.run_number }}"
+          az deployment sub create \
+            --name "$DEPLOYMENT" \
+            --location "${{ vars.AZURE_LOCATION }}" \
+            --template-file infra/bicep/main.bicep \
+            --parameters infra/bicep/parameters/dev.bicepparam \
+            --parameters apiImage="$BOOTSTRAP_IMAGE" webImage="$BOOTSTRAP_IMAGE"
+          # Export outputs for later steps.
+          outputs=$(az deployment sub show --name "$DEPLOYMENT" --query properties.outputs -o json)
+          echo "registry=$(echo "$outputs" | jq -r .registryLoginServer.value)" >> "$GITHUB_OUTPUT"
+          echo "resource_group=$(echo "$outputs" | jq -r .resourceGroupName.value)" >> "$GITHUB_OUTPUT"
+          echo "api_app=$(echo "$outputs" | jq -r .apiAppName.value)" >> "$GITHUB_OUTPUT"
+          echo "web_app=$(echo "$outputs" | jq -r .webAppName.value)" >> "$GITHUB_OUTPUT"
+          echo "api_url=$(echo "$outputs" | jq -r .apiUrl.value)" >> "$GITHUB_OUTPUT"
+          echo "web_url=$(echo "$outputs" | jq -r .webUrl.value)" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to ACR
+        run: az acr login --name "$(echo '${{ steps.infra.outputs.registry }}' | cut -d. -f1)"
+
+      - name: Build and push images
+        env:
+          REGISTRY: ${{ steps.infra.outputs.registry }}
+          API_URL: ${{ steps.infra.outputs.api_url }}
+          WEB_URL: ${{ steps.infra.outputs.web_url }}
+        run: |
+          set -euo pipefail
+          API_IMAGE="${REGISTRY}/app-api:${IMAGE_TAG}"
+          WEB_IMAGE="${REGISTRY}/app-web:${IMAGE_TAG}"
+
+          docker build -t "$API_IMAGE" apps/api
+          docker push "$API_IMAGE"
+
+          docker build -t "$WEB_IMAGE" apps/web \
+            --build-arg NEXT_PUBLIC_API_BASE_URL="$API_URL" \
+            --build-arg NEXT_PUBLIC_AUTH_DISABLED=false \
+            --build-arg NEXT_PUBLIC_ENTRA_CLIENT_ID="${{ vars.ENTRA_FRONTEND_CLIENT_ID }}" \
+            --build-arg NEXT_PUBLIC_ENTRA_TENANT_ID="${{ secrets.AZURE_TENANT_ID }}" \
+            --build-arg NEXT_PUBLIC_ENTRA_REDIRECT_URI="$WEB_URL" \
+            --build-arg NEXT_PUBLIC_ENTRA_API_SCOPE="${{ vars.ENTRA_BACKEND_APP_ID_URI }}/access_as_user"
+          docker push "$WEB_IMAGE"
+
+          echo "API_IMAGE=$API_IMAGE" >> "$GITHUB_ENV"
+          echo "WEB_IMAGE=$WEB_IMAGE" >> "$GITHUB_ENV"
+
+      - name: Roll out new images to Container Apps
+        run: |
+          set -euo pipefail
+          az containerapp update \
+            --name "${{ steps.infra.outputs.api_app }}" \
+            --resource-group "${{ steps.infra.outputs.resource_group }}" \
+            --image "$API_IMAGE"
+          az containerapp update \
+            --name "${{ steps.infra.outputs.web_app }}" \
+            --resource-group "${{ steps.infra.outputs.resource_group }}" \
+            --image "$WEB_IMAGE"
+
+      - name: Summary
+        run: |
+          {
+            echo "### Deployed to dev"
+            echo "- API:  ${{ steps.infra.outputs.api_url }}"
+            echo "- Web:  ${{ steps.infra.outputs.web_url }}"
+          } >> "$GITHUB_STEP_SUMMARY"

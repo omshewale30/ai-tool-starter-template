@@ -1,0 +1,16 @@
+{
+  "project_name": "Internal AI Tool",
+  "project_slug": "{{ cookiecutter.project_name.lower().replace(' ', '-').replace('_', '-') }}",
+  "python_package_name": "{{ cookiecutter.project_slug.replace('-', '_') }}",
+  "project_description": "An internal AI-native web application.",
+  "azure_location": "eastus",
+  "resource_prefix": "aitool",
+  "entra_tenant_id": "00000000-0000-0000-0000-000000000000",
+  "frontend_client_id": "00000000-0000-0000-0000-000000000000",
+  "backend_client_id": "00000000-0000-0000-0000-000000000000",
+  "backend_app_id_uri": "api://{{ cookiecutter.project_slug }}",
+  "enable_ai_search": ["no", "yes"],
+  "_copy_without_render": [
+    ".github/workflows/*.yml"
+  ]
+}

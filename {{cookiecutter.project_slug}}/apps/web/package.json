@@ -1,0 +1,41 @@
+{
+  "name": "{{ cookiecutter.project_slug }}-web",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": "^20.19.0 || ^22.13.0 || >=24"
+  },
+  "description": "{{ cookiecutter.project_description }} — Next.js frontend",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@azure/msal-browser": "^3.18.0",
+    "@azure/msal-react": "^2.0.22",
+    "next": "14.2.35",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.45.0",
+    "@testing-library/jest-dom": "^6.4.6",
+    "@testing-library/react": "^16.0.0",
+    "@testing-library/user-event": "^14.5.2",
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "14.2.35",
+    "jsdom": "^24.1.0",
+    "typescript": "^5.5.3",
+    "vitest": "^2.0.0"
+  }
+}
