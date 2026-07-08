@@ -1,7 +1,12 @@
-// Top-level deployment for {{ cookiecutter.project_name }}.
+// LEGACY top-level deployment for {{ cookiecutter.project_name }}.
 //
-// Subscription-scoped: creates the resource group and all resources within it.
-// Deploy with:
+// This monolithic subscription-scoped template creates the resource group and
+// all services in one run. It is kept for backward compatibility.
+//
+// Preferred path: deploy one service at a time with group-scoped entrypoints in
+// infra/bicep/services and scripts in infra/scripts.
+//
+// Legacy deploy command:
 //   az deployment sub create \
 //     --location {{ cookiecutter.azure_location }} \
 //     --template-file infra/bicep/main.bicep \

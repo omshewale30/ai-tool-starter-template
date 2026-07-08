@@ -1,5 +1,8 @@
 using '../main.bicep'
 
+// Legacy monolithic deployment parameters.
+// Preferred per-service workflow uses infra/bicep/services + infra/scripts.
+
 // Non-secret values are safe to keep here. Secrets and image tags are read from
 // environment variables (set by the CI pipeline), never committed.
 

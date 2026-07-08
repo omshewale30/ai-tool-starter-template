@@ -36,3 +36,8 @@ test-results/
 # ---- Build / local db ----
 *.sqlite3
 *.db
+
+# ---- Infra local state / generated files ----
+infra/state/*.json
+infra/bicep/services/*.json
+.azure/

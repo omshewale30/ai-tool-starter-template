@@ -31,25 +31,70 @@ Operational procedures for {{ cookiecutter.project_name }}.
 Push to `main` or run the **Deploy (dev)** workflow manually. It:
 
 1. Logs in to Azure via OIDC.
-2. Provisions infrastructure with Bicep (seeding a public bootstrap image so the
-   first run succeeds before your images exist).
+2. Provisions infrastructure with Bicep.
 3. Builds and pushes the API and web images to ACR.
 4. Rolls out the new images with `az containerapp update`.
 
-### Manual deploy (from a workstation)
+> Note: the current workflow still uses `infra/bicep/main.bicep` (legacy
+> monolithic path). The recommended operator workflow is the new per-service
+> scripts below.
+
+### Manual deploy (per service into an existing RG)
+
+Create the resource group manually first, then deploy one service per run.
+Scripts never create resource groups.
+
+Each script:
+
+- uses `az deployment group create`
+- deploys exactly one service entrypoint in `infra/bicep/services`
+- writes outputs to `infra/state/<resource-group>.json` for explicit dependency chaining
+
+#### Deployment order (recommended)
+
+1. `identity`: foundation for RBAC assignments used by other services.
+2. `observability`: Log Analytics/App Insights needed by Key Vault seed + CA env.
+3. `registry`: needs identity principal id.
+4. `storage`: needs identity principal id.
+5. `postgres` (currently backed by the Azure SQL module): needs Entra admin object id (typically identity principal id).
+6. `key-vault`: needs identity principal id; optionally seeds SQL/App Insights secrets.
+7. `container-apps-env`: needs Log Analytics workspace name.
+8. `search` (optional): needs identity principal id.
+9. `api-app`: needs env, identity, registry, storage, database, and key vault outputs.
+10. `web-app`: needs env, identity, and registry outputs.
+
+#### Exact commands for `rg-nimbus`
 
 ```bash
 az login
 az account set --subscription <sub-id>
-export SQL_ADMIN_PASSWORD='...'   # not stored anywhere
-az deployment sub create \
-  --location {{ cookiecutter.azure_location }} \
-  --template-file infra/bicep/main.bicep \
-  --parameters infra/bicep/parameters/dev.bicepparam \
-  --parameters apiImage=mcr.microsoft.com/k8se/quickstart:latest \
-               webImage=mcr.microsoft.com/k8se/quickstart:latest
-# then build/push images to the created ACR and `az containerapp update`.
+export SQL_ADMIN_PASSWORD='...'
+export API_IMAGE='REPLACE_ME.azurecr.io/{{ cookiecutter.project_slug }}-api:<tag>'
+export WEB_IMAGE='REPLACE_ME.azurecr.io/{{ cookiecutter.project_slug }}-web:<tag>'
+export AZURE_AI_FOUNDRY_ENDPOINT='https://<foundry-resource>.openai.azure.com/'
+
+cd infra/scripts
+
+./deploy-identity.sh -g rg-nimbus -e dev -l {{ cookiecutter.azure_location }}
+./deploy-observability.sh -g rg-nimbus -e dev -l {{ cookiecutter.azure_location }}
+./deploy-registry.sh -g rg-nimbus -e dev -l {{ cookiecutter.azure_location }}
+./deploy-storage.sh -g rg-nimbus -e dev -l {{ cookiecutter.azure_location }}
+./deploy-postgres.sh -g rg-nimbus -e dev -l {{ cookiecutter.azure_location }} --sql-admin-password "$SQL_ADMIN_PASSWORD"
+./deploy-key-vault.sh -g rg-nimbus -e dev -l {{ cookiecutter.azure_location }} --sql-admin-password "$SQL_ADMIN_PASSWORD"
+./deploy-container-apps-env.sh -g rg-nimbus -e dev -l {{ cookiecutter.azure_location }}
+
+# Optional search service:
+./deploy-search.sh -g rg-nimbus -e dev -l {{ cookiecutter.azure_location }}
+
+./deploy-api-app.sh -g rg-nimbus -e dev -l {{ cookiecutter.azure_location }} \
+  --image "$API_IMAGE" \
+  --foundry-endpoint "$AZURE_AI_FOUNDRY_ENDPOINT"
+./deploy-web-app.sh -g rg-nimbus -e dev -l {{ cookiecutter.azure_location }} \
+  --image "$WEB_IMAGE"
 ```
+
+If needed, pass explicit dependency overrides to any script (`--help`) instead of
+state-file defaults.
 
 Apply database migrations after the first deploy (from a machine that can reach
 Azure SQL, or a one-off job):

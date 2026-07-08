@@ -163,23 +163,42 @@ Detailed walkthrough: [`docs/security.md`](docs/security.md) and the runbook.
 
 ## Azure setup overview
 
-Infrastructure is defined in [`infra/bicep`](infra/bicep). It provisions a
-resource group's worth of services (Container Apps, ACR, Key Vault, Azure SQL,
-Storage, App Insights). See [Deployment overview](#deployment-overview).
+Infrastructure now supports **per-service, resource-group scoped** deployments:
+
+- Group-scoped Bicep entrypoints: [`infra/bicep/services`](infra/bicep/services)
+- One-service deploy scripts: [`infra/scripts`](infra/scripts)
+- Local dependency/output state file: `infra/state/<resource-group>.json`
+
+`infra/bicep/main.bicep` is still present as a **legacy monolithic path** for
+backward compatibility, but the recommended workflow is one service per run into
+an existing resource group.
 
 ## Deployment overview
 
-Deployment is via GitHub Actions using **OIDC federation** (no stored Azure
-passwords). See [`.github/workflows/deploy-dev.yml`](.github/workflows/deploy-dev.yml)
-and [`docs/runbook.md`](docs/runbook.md).
+Deployment can still run via GitHub Actions using OIDC federation, but manual
+workstation deploys should use per-service scripts:
 
 ```bash
-# One-time, manual, from a workstation (alternative to CI):
-az deployment sub create \
-  --location {{ cookiecutter.azure_location }} \
-  --template-file infra/bicep/main.bicep \
-  --parameters infra/bicep/parameters/dev.bicepparam
+export SQL_ADMIN_PASSWORD='...'
+export API_IMAGE='REPLACE_ME.azurecr.io/{{ cookiecutter.project_slug }}-api:<tag>'
+export WEB_IMAGE='REPLACE_ME.azurecr.io/{{ cookiecutter.project_slug }}-web:<tag>'
+
+cd infra/scripts
+./deploy-identity.sh -g rg-nimbus -e dev -l {{ cookiecutter.azure_location }}
+./deploy-observability.sh -g rg-nimbus -e dev -l {{ cookiecutter.azure_location }}
+./deploy-registry.sh -g rg-nimbus -e dev -l {{ cookiecutter.azure_location }}
+./deploy-storage.sh -g rg-nimbus -e dev -l {{ cookiecutter.azure_location }}
+./deploy-postgres.sh -g rg-nimbus -e dev -l {{ cookiecutter.azure_location }} --sql-admin-password "$SQL_ADMIN_PASSWORD"
+./deploy-key-vault.sh -g rg-nimbus -e dev -l {{ cookiecutter.azure_location }} --sql-admin-password "$SQL_ADMIN_PASSWORD"
+./deploy-container-apps-env.sh -g rg-nimbus -e dev -l {{ cookiecutter.azure_location }}
+# optional:
+./deploy-search.sh -g rg-nimbus -e dev -l {{ cookiecutter.azure_location }}
+./deploy-api-app.sh -g rg-nimbus -e dev -l {{ cookiecutter.azure_location }} --image "$API_IMAGE"
+./deploy-web-app.sh -g rg-nimbus -e dev -l {{ cookiecutter.azure_location }} --image "$WEB_IMAGE"
 ```
+
+See [`docs/runbook.md`](docs/runbook.md) for full dependency details and
+parameter guidance.
 
 ## Creating a new project from the template
 
