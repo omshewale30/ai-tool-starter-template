@@ -10,8 +10,8 @@ local dev), Bicep infrastructure, GitHub Actions CI/CD, tests, and docs.
 
 ## What you get
 
-- **Frontend** — Next.js (App Router) + TypeScript, MSAL auth, a typed API
-  client that attaches Entra access tokens to backend calls.
+- **Frontend** — Next.js (App Router) + TypeScript, Tailwind CSS, MSAL auth,
+  and a typed API client that attaches Entra access tokens to backend calls.
 - **Backend** — FastAPI with JWT validation for Entra, role/group checks,
   structured logging, correlation IDs, consistent error envelopes, SQLAlchemy +
   Alembic, and a pluggable AI provider (mock / Azure AI Foundry).

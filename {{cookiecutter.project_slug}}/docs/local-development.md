@@ -45,6 +45,10 @@ npm install
 npm run dev
 ```
 
+The frontend includes Tailwind CSS. Theme tokens live in
+`apps/web/src/app/globals.css` so generated projects can adjust colors, radius,
+and related utilities without adding extra config files.
+
 ## Mock AI mode
 
 `AI_PROVIDER=mock` (the default locally) uses `MockAIProvider`, which echoes a

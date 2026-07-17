@@ -57,7 +57,7 @@ directly. All privileged calls go through the backend. See
 
 | Layer | Choice |
 | --- | --- |
-| Frontend | Next.js (App Router) + TypeScript, MSAL |
+| Frontend | Next.js (App Router) + TypeScript, MSAL, Tailwind CSS |
 | Backend | FastAPI + Python 3.11 |
 | Auth | Microsoft Entra ID (OAuth2 / OIDC) |
 | AI | Azure AI Foundry (mockable) |
@@ -132,6 +132,10 @@ cp .env.local.example .env.local
 npm install
 npm run dev                    # http://localhost:3000
 ```
+
+Tailwind CSS is enabled by default. Customize the starter theme tokens in
+`apps/web/src/app/globals.css`, then use Tailwind utility classes in your
+components.
 
 ## Running tests
 
