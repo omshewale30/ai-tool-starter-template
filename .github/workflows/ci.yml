@@ -1,0 +1,35 @@
+name: CI
+
+# Verifies the Cookiecutter template itself: renders a project per variant and
+# runs that project's own checks (scripts/ci.sh), Bicep compilation, and
+# `docker compose config`. See scripts/verify-template.sh.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    uses: FO-AI/automation/.github/workflows/reusable-ci.yml@2b57fa6020a4be6f65b3c910e2756689b937395a # v2 interface
+    with:
+      checks: >-
+        [{"name":"template (search=no)","directory":".","python-version":"3.11","node-version":"22",
+          "install":"python -m pip install cookiecutter",
+          "run":"PYTHON=python bash scripts/verify-template.sh --variant no --docker"},
+         {"name":"template (search=yes)","directory":".","python-version":"3.11","node-version":"22",
+          "install":"python -m pip install cookiecutter",
+          "run":"PYTHON=python bash scripts/verify-template.sh --variant yes"}]
+
+  verify:
+    if: always()
+    needs: [checks]
+    runs-on: ubuntu-latest
+    steps:
+      - run: test "${{ needs.checks.result }}" = success
