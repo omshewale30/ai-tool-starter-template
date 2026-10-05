@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 from contextvars import ContextVar
 
-from pythonjsonlogger import jsonlogger
+from pythonjsonlogger.json import JsonFormatter
 
 # Set by the correlation-id middleware for the duration of each request.
 correlation_id_ctx: ContextVar[str | None] = ContextVar("correlation_id", default=None)
@@ -25,7 +25,7 @@ def configure_logging(level: str = "INFO") -> None:
     handler = logging.StreamHandler()
     handler.addFilter(CorrelationIdFilter())
     handler.setFormatter(
-        jsonlogger.JsonFormatter(
+        JsonFormatter(
             "%(asctime)s %(levelname)s %(name)s %(message)s %(correlation_id)s",
             rename_fields={"asctime": "timestamp", "levelname": "level"},
         )

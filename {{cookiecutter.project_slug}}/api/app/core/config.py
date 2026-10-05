@@ -63,11 +63,21 @@ class Settings(BaseSettings):
     # `postgres://` or `postgresql://` URL is accepted and mapped to psycopg.
     database_url: str = "sqlite+pysqlite:///./local.db"
 
-    # ---- Azure AI Foundry (only used when ai_provider == foundry) ----
+    # ---- Azure OpenAI / AI Foundry (only used when ai_provider == foundry) ----
+    # UNC's Azure-hosted models. The API authenticates with its managed identity
+    # (DefaultAzureCredential, keyless); UNC grants that identity the
+    # "Cognitive Services OpenAI User" role on the resource. See docs/ai.md.
     azure_ai_foundry_endpoint: str = ""
     azure_ai_foundry_project_name: str = ""
+    # Chat/completions deployment, and the embeddings deployment (RAG, similarity).
     azure_ai_foundry_deployment_name: str = ""
-    azure_ai_foundry_api_version: str = "2024-08-01-preview"
+    azure_ai_foundry_embedding_deployment_name: str = ""
+    azure_ai_foundry_api_version: str = "2024-10-21"
+    # Per-request timeout and SDK retries (429/5xx with backoff).
+    ai_request_timeout_seconds: float = 60.0
+    ai_max_retries: int = 3
+    # Upper bound on output tokens per response; None leaves it to the model.
+    ai_max_output_tokens: int | None = None
 
     # ---- Azure Blob Storage ----
     azure_storage_account_url: str = ""

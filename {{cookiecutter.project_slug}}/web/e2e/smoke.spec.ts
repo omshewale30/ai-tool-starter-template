@@ -24,7 +24,18 @@ test("assistant answers through the proxy", async ({ page }) => {
   await page.getByLabel("Message").fill("Hello there");
   await page.getByRole("button", { name: "Send" }).click();
   // The mock provider echoes the prompt back.
-  await expect(page.getByText("[mock] You said: Hello there")).toBeVisible();
+  await expect(page.getByText("[mock] You said: Hello there", { exact: true })).toBeVisible();
   // Next.js renders its own role=alert route announcer, so match our error box by text.
   await expect(page.getByRole("alert").filter({ hasText: "Error" })).toHaveCount(0);
+});
+
+test("streamed answers arrive through the proxy as server-sent events", async ({ request }) => {
+  const response = await request.post("/api/v1/chat/stream", {
+    data: { message: "stream please" },
+  });
+  expect(response.ok()).toBeTruthy();
+  expect(response.headers()["content-type"]).toContain("text/event-stream");
+  const body = await response.text();
+  expect(body).toContain("event: delta");
+  expect(body.trim().split("\n\n").at(-1)).toContain("event: done");
 });

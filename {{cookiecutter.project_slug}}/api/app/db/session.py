@@ -4,11 +4,14 @@ Uses a synchronous SQLAlchemy engine for simplicity (boring and maintainable).
 The engine is created lazily from `Settings.database_url` so importing this
 module never requires a reachable database — important for tests.
 """
+
 from __future__ import annotations
 
 from collections.abc import Iterator
 from functools import lru_cache
+from typing import Annotated
 
+from fastapi import Depends
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -46,3 +49,9 @@ def get_db() -> Iterator[Session]:
         raise
     finally:
         session.close()
+
+
+# For work that outlives the request-scoped session, such as recording what a
+# streamed response produced after the stream ends. Tests override
+# `get_session_factory` to point at their database.
+SessionFactory = Annotated[sessionmaker[Session], Depends(get_session_factory)]

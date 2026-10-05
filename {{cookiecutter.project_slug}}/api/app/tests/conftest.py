@@ -23,7 +23,7 @@ from sqlalchemy.pool import StaticPool
 
 import app.models  # noqa: F401  register models on metadata
 from app.db.base import Base
-from app.db.session import get_db
+from app.db.session import get_db, get_session_factory
 from app.main import app
 
 
@@ -65,6 +65,7 @@ def client(_engine):
             session.close()
 
     app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_session_factory] = lambda: TestingSession
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()

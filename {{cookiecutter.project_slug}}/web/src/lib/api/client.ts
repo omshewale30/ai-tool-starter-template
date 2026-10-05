@@ -8,7 +8,7 @@
  *
  * Add one method per endpoint, typed with the generated schema in `./types`.
  */
-import type { ChatResponse, ErrorResponse, MeResponse } from "@/lib/api/types";
+import type { ChatRequest, ChatResponse, ErrorResponse, MeResponse } from "@/lib/api/types";
 
 export class ApiError extends Error {
   readonly status: number;
@@ -39,7 +39,9 @@ export interface ApiClient {
   /** Like `request`, but returns the raw Response (for streaming bodies). */
   raw(path: string, init?: RequestInit): Promise<Response>;
   getMe(): Promise<MeResponse>;
-  chat(message: string): Promise<ChatResponse>;
+  chat(request: ChatRequest): Promise<ChatResponse>;
+  /** Server-sent events; read the body with `readServerSentEvents`. */
+  chatStream(request: ChatRequest, signal?: AbortSignal): Promise<Response>;
 }
 
 async function toApiError(response: Response): Promise<ApiError> {
@@ -91,10 +93,14 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     request,
     raw,
     getMe: () => request<MeResponse>("/api/v1/me"),
-    chat: (message: string) =>
-      request<ChatResponse>("/api/v1/chat", {
+    chat: (body: ChatRequest) =>
+      request<ChatResponse>("/api/v1/chat", { method: "POST", body: JSON.stringify(body) }),
+    chatStream: (body: ChatRequest, signal?: AbortSignal) =>
+      raw("/api/v1/chat/stream", {
         method: "POST",
-        body: JSON.stringify({ message }),
+        body: JSON.stringify(body),
+        headers: { Accept: "text/event-stream" },
+        signal,
       }),
   };
 }

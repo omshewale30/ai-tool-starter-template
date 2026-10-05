@@ -14,7 +14,7 @@ WORKDIR /app
 
 COPY pyproject.toml alembic.ini ./
 COPY app ./app
-RUN pip install ".[foundry]" \
+RUN pip install . \
     && useradd --system --uid 1001 --no-create-home appuser
 
 USER appuser

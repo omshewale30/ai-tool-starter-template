@@ -25,7 +25,7 @@ describe("createApiClient", () => {
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
 
-    const result = await client.chat("hello");
+    const result = await client.chat({ message: "hello" });
 
     expect(result.response).toBe("hi");
     const call = fetchImpl.mock.calls[0]!;

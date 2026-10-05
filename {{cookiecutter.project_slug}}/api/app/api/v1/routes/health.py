@@ -9,6 +9,7 @@
 `/api/health` always answers 200 and reports booleans only, never configuration
 values; callers decide what "healthy enough" means from the body.
 """
+
 from __future__ import annotations
 
 from typing import Annotated, Literal

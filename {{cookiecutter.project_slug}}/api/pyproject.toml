@@ -4,11 +4,11 @@ version = "0.1.0"
 description = "{{ cookiecutter.project_description }} — FastAPI backend"
 requires-python = ">=3.11"
 dependencies = [
-    "fastapi>=0.111",
+    "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
     "pydantic>=2.7",
     "pydantic-settings>=2.3",
-    "python-json-logger>=2.0",
+    "python-json-logger>=3.1",
     "sqlalchemy>=2.0",
     "alembic>=1.13",
     # PostgreSQL driver (Azure Database for PostgreSQL Flexible Server)
@@ -19,6 +19,8 @@ dependencies = [
     # Azure SDKs (managed identity / keyless where possible)
     "azure-identity>=1.17",
     "azure-storage-blob>=12.20",
+    # Azure OpenAI / AI Foundry (services/ai/foundry_provider.py)
+    "openai>=2.0",
     # Observability
     "opentelemetry-api>=1.25",
     "opentelemetry-sdk>=1.25",
@@ -26,10 +28,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-foundry = [
-    # Pin to the SDK you deploy against; see services/ai/foundry_provider.py
-    "openai>=1.40",
-]
 search = [
     "azure-search-documents>=11.5",
 ]
@@ -46,6 +44,9 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["app*"]
+
+[tool.setuptools.package-data]
+"app.prompts" = ["*.md"]
 
 [tool.ruff]
 line-length = 100

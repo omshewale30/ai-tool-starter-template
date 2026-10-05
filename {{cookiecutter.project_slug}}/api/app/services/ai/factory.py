@@ -3,9 +3,13 @@
 Cached per-settings so we don't rebuild clients on every request. The chat route
 depends on `get_ai_provider` and never imports a concrete provider directly.
 """
+
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Annotated
+
+from fastapi import Depends
 
 from app.core.config import AIProviderName, Settings, get_settings
 from app.services.ai.base import AIProvider
@@ -25,3 +29,11 @@ def _build_provider(provider_name: AIProviderName) -> AIProvider:
 def get_ai_provider(settings: Settings | None = None) -> AIProvider:
     settings = settings or get_settings()
     return _build_provider(settings.ai_provider)
+
+
+def _provider_dependency(settings: Annotated[Settings, Depends(get_settings)]) -> AIProvider:
+    return get_ai_provider(settings)
+
+
+# Use in routes: `async def handler(ai: AI): ...`. Tests override `_provider_dependency`.
+AI = Annotated[AIProvider, Depends(_provider_dependency)]

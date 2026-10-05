@@ -4,6 +4,7 @@
 The frontend generates its typed client from this (`npm run generate:api` in
 web/). Run from anywhere; it needs the API's dependencies installed.
 """
+
 from __future__ import annotations
 
 import json
