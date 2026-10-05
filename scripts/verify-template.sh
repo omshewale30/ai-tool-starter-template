@@ -65,15 +65,19 @@ verify_variant() {
     return 1
   fi
 
-  # Opt-out variants must not carry the optional code paths.
-  if [[ "$search" == "no" && -e "$project/api/app/services/search" ]]; then
-    echo "error: enable_ai_search=no but api/app/services/search was generated" >&2
-    return 1
-  fi
-  if [[ "$search" == "yes" && ! -e "$project/api/app/services/search" ]]; then
-    echo "error: enable_ai_search=yes but api/app/services/search is missing" >&2
-    return 1
-  fi
+  # Opt-out variants must not carry the optional RAG code paths; opt-in ones must.
+  local rag_paths=(api/app/services/search api/app/api/v1/routes/rag.py
+    web/src/app/documents infra/search infra/scripts/setup-search-index.sh docs/rag.md)
+  for path in "${rag_paths[@]}"; do
+    if [[ "$search" == "no" && -e "$project/$path" ]]; then
+      echo "error: enable_ai_search=no but $path was generated" >&2
+      return 1
+    fi
+    if [[ "$search" == "yes" && ! -e "$project/$path" ]]; then
+      echo "error: enable_ai_search=yes but $path is missing" >&2
+      return 1
+    fi
+  done
 
   (
     cd "$project"

@@ -15,6 +15,9 @@ import { ORGANIZATION, SITE_NAME } from "@/lib/site";
 const NAV_ITEMS = [
   { href: "/", label: "Home" },
   { href: "/chat", label: "Assistant" },
+{%- if cookiecutter.enable_ai_search == "yes" %}
+  { href: "/documents", label: "Documents" },
+{%- endif %}
   { href: "/profile", label: "Profile" },
 ];
 

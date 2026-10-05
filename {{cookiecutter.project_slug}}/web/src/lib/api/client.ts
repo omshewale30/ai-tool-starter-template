@@ -40,8 +40,11 @@ export interface ApiClient {
   raw(path: string, init?: RequestInit): Promise<Response>;
   getMe(): Promise<MeResponse>;
   chat(request: ChatRequest): Promise<ChatResponse>;
-  /** Server-sent events; read the body with `readServerSentEvents`. */
-  chatStream(request: ChatRequest, signal?: AbortSignal): Promise<Response>;
+  /**
+   * Server-sent events; read the body with `readServerSentEvents`. `path` selects the
+   * streaming endpoint (plain chat by default; e.g. grounded answers when RAG is on).
+   */
+  chatStream(request: ChatRequest, signal?: AbortSignal, path?: string): Promise<Response>;
 }
 
 async function toApiError(response: Response): Promise<ApiError> {
@@ -95,8 +98,8 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     getMe: () => request<MeResponse>("/api/v1/me"),
     chat: (body: ChatRequest) =>
       request<ChatResponse>("/api/v1/chat", { method: "POST", body: JSON.stringify(body) }),
-    chatStream: (body: ChatRequest, signal?: AbortSignal) =>
-      raw("/api/v1/chat/stream", {
+    chatStream: (body: ChatRequest, signal?: AbortSignal, path = "/api/v1/chat/stream") =>
+      raw(path, {
         method: "POST",
         body: JSON.stringify(body),
         headers: { Accept: "text/event-stream" },

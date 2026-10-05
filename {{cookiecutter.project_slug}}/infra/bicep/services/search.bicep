@@ -12,6 +12,12 @@ param location string = resourceGroup().location
 @description('Principal id of the managed identity that queries search.')
 param appPrincipalId string
 
+@description('Existing storage account that holds the documents container.')
+param storageAccountName string
+
+@description('Blob container the indexer reads.')
+param documentsContainerName string = 'documents'
+
 @description('Optional tags merged with default tags.')
 param extraTags object = {}
 
@@ -29,8 +35,13 @@ module search '../modules/search.bicep' = {
     location: location
     tags: tags
     appPrincipalId: appPrincipalId
+    storageAccountName: storageAccountName
+    documentsContainerName: documentsContainerName
   }
 }
 
 output searchName string = search.outputs.searchName
 output searchEndpoint string = search.outputs.searchEndpoint
+output searchPrincipalId string = search.outputs.searchPrincipalId
+output storageAccountId string = search.outputs.storageAccountId
+output documentsContainerName string = search.outputs.documentsContainerName

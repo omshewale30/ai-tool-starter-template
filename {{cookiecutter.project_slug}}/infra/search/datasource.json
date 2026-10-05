@@ -1,0 +1,7 @@
+{
+  "name": "__INDEX__-blob",
+  "description": "Documents dropped in the storage container; read with the search service's managed identity.",
+  "type": "azureblob",
+  "credentials": { "connectionString": "ResourceId=__STORAGE_ACCOUNT_ID__;" },
+  "container": { "name": "__CONTAINER__" }
+}

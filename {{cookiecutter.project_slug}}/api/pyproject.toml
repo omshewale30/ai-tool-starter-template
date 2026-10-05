@@ -21,6 +21,10 @@ dependencies = [
     "azure-storage-blob>=12.20",
     # Azure OpenAI / AI Foundry (services/ai/foundry_provider.py)
     "openai>=2.0",
+{%- if cookiecutter.enable_ai_search == "yes" %}
+    # Azure AI Search retrieval for RAG (services/search)
+    "azure-search-documents>=11.6",
+{%- endif %}
     # Observability
     "opentelemetry-api>=1.25",
     "opentelemetry-sdk>=1.25",
@@ -28,9 +32,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-search = [
-    "azure-search-documents>=11.5",
-]
 dev = [
     "pytest>=8.2",
     "pytest-asyncio>=0.23",

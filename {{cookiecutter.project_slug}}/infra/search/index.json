@@ -1,0 +1,25 @@
+{
+  "name": "__INDEX__",
+  "fields": [
+    { "name": "chunk_id", "type": "Edm.String", "key": true, "searchable": true, "filterable": false, "sortable": true, "facetable": false, "analyzer": "keyword" },
+    { "name": "parent_id", "type": "Edm.String", "searchable": false, "filterable": true, "sortable": false, "facetable": false },
+    { "name": "title", "type": "Edm.String", "searchable": true, "filterable": true, "sortable": false, "facetable": false },
+    { "name": "chunk", "type": "Edm.String", "searchable": true, "filterable": false, "sortable": false, "facetable": false },
+    { "name": "text_vector", "type": "Collection(Edm.Single)", "searchable": true, "retrievable": false, "stored": false, "dimensions": __DIMENSIONS__, "vectorSearchProfile": "default-profile" }
+  ],
+  "vectorSearch": {
+    "algorithms": [{ "name": "hnsw", "kind": "hnsw", "hnswParameters": { "metric": "cosine" } }],
+    "profiles": [{ "name": "default-profile", "algorithm": "hnsw", "vectorizer": "azure-openai" }],
+    "vectorizers": [
+      {
+        "name": "azure-openai",
+        "kind": "azureOpenAI",
+        "azureOpenAIParameters": {
+          "resourceUri": "__AOAI_ENDPOINT__",
+          "deploymentId": "__EMBEDDING_DEPLOYMENT__",
+          "modelName": "__EMBEDDING_MODEL__"
+        }
+      }
+    ]
+  }
+}
