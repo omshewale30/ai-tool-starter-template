@@ -53,27 +53,36 @@ async def lifespan(_: FastAPI):
 
 
 def create_app() -> FastAPI:
+    # Interactive docs are for local development only. The API sits behind the
+    # web app in Azure; the OpenAPI document is still generated for the
+    # frontend's typed client (see scripts/export_openapi.py).
+    docs_enabled = settings.environment in {"local", "test"}
     app = FastAPI(
         title=settings.app_name,
         version="0.1.0",
         description="{{ cookiecutter.project_description }}",
         lifespan=lifespan,
+        docs_url="/docs" if docs_enabled else None,
+        redoc_url=None,
+        openapi_url="/openapi.json" if docs_enabled else None,
     )
 
     app.add_middleware(CorrelationIdMiddleware)
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.cors_origins_list,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-        expose_headers=["X-Correlation-ID"],
-    )
+    if settings.cors_origins_list:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=settings.cors_origins_list,
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+            expose_headers=["X-Correlation-ID"],
+        )
 
     register_error_handlers(app)
 
     # Health probes at the root; versioned API under /api/v1.
     app.include_router(health.router)
+    app.include_router(health.api_health_router)
     app.include_router(api_router, prefix=settings.api_v1_prefix)
 
     return app

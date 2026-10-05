@@ -30,6 +30,12 @@ check_backend() {
 check_frontend() {
   (
     cd web
+    # The committed API types must match the API (needs the API's Python deps).
+    npm run generate:api
+    git diff --exit-code -- src/lib/api/schema.ts || {
+      echo "error: web/src/lib/api/schema.ts is stale. Run 'npm run generate:api' in web/ and commit it." >&2
+      exit 1
+    }
     npm run lint
     npm run typecheck
     npm test

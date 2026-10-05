@@ -1,132 +1,83 @@
 @import "tailwindcss";
 
 /*
-  Tailwind v4 uses CSS-first theme tokens. Generated projects can customize
-  these values to change the starter palette, radius, and utility classes.
+  Design tokens (Tailwind v4, CSS-first). Every color utility in the app comes
+  from here, so a tool restyles by editing this block only.
+
+  UNC palette and how to use it (UNC-Chapel Hill identity guidelines):
+  - Carolina Blue #4B9CD3 is the dominant brand color, but it is a SURFACE and
+    BORDER color: it measures 3.0:1 on white, which passes for large text and UI
+    boundaries only. Never put body text in it, or white body text on it.
+  - White text sits on Bolin Creek #2C5080 (8.1:1) or Navy #13294B (14.5:1).
+  - Link text uses UNC's digital-link blue #007FAE (4.5:1, on white only).
+  The bar is WCAG 2.2 AA: 4.5:1 for text under 24px, 3:1 for UI boundaries and
+  focus indicators. Re-measure any pair you change.
 */
 @theme {
-  --color-app-bg: #f7f8fa;
-  --color-app-surface: #ffffff;
-  --color-app-border: #e2e5ea;
-  --color-app-text: #1c2430;
-  --color-app-muted: #5b6675;
-  --color-app-primary: #2563eb;
-  --color-app-primary-contrast: #ffffff;
-  --color-app-danger: #b42318;
-  --color-app-danger-bg: #fef3f2;
-  --color-app-warn: #92400e;
-  --color-app-warn-bg: #fffbeb;
-  --radius-app: 8px;
+  --color-unc-blue: #4b9cd3;
+  --color-unc-navy: #13294b;
+  --color-unc-bolin: #2c5080;
+  --color-unc-fountain: #b7d7ed;
+  --color-unc-cloud: #edf5fb;
+  --color-unc-slate: #5b6670;
+  --color-unc-link: #007fae;
+
+  --color-page: #f7f9fb;
+  --color-surface: #ffffff;
+  --color-text: #1f2933;
+  --color-muted: #5b6670;
+  /* Decorative dividers. Input and control outlines use border-strong (3:1+). */
+  --color-border: #d9e1e8;
+  --color-border-strong: #6b7580;
+
+  --color-danger: #b42318;
+  --color-danger-bg: #fef3f2;
+  --color-warning: #7a4a00;
+  --color-warning-bg: #fff8e1;
+  --color-success: #1e6b3a;
+  --color-success-bg: #ecf7ef;
+
+  /* UNC's brand sans is Open Sans; Arial is the sanctioned substitute. To use Open
+     Sans, self-host it with next/font/local (the CSP blocks font CDNs). */
+  --font-sans: Arial, "Helvetica Neue", Helvetica, sans-serif;
+  --radius-app: 0.5rem;
 }
 
-html,
-body {
-  @apply m-0 bg-app-bg p-0 text-app-text;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  font-size: 15px;
-  line-height: 1.5;
-}
+@layer base {
+  html {
+    @apply bg-page text-text antialiased;
+    font-family: var(--font-sans);
+  }
 
-a {
-  @apply text-app-primary no-underline;
-}
+  body {
+    @apply min-h-screen text-base leading-relaxed;
+  }
 
-.app-shell {
-  @apply flex min-h-screen flex-col;
-}
+  a {
+    @apply text-unc-link underline-offset-2 hover:underline;
+  }
 
-.nav {
-  @apply flex items-center justify-between gap-4 border-b border-app-border bg-app-surface px-5 py-3;
-}
+  h1 {
+    @apply text-2xl font-bold text-unc-navy;
+  }
 
-.nav-brand {
-  @apply font-semibold;
-}
+  h2 {
+    @apply text-lg font-semibold text-unc-navy;
+  }
 
-.nav-links {
-  @apply flex items-center gap-5;
-}
-
-.nav-user {
-  @apply text-sm text-app-muted;
-}
-
-.main {
-  @apply mx-auto w-full max-w-[860px] flex-1 px-5 pb-12 pt-6;
-}
-
-.card {
-  @apply mb-4 rounded-app border border-app-border bg-app-surface p-5;
-}
-
-.btn {
-  @apply inline-flex cursor-pointer items-center gap-1.5 rounded-app border border-app-primary bg-app-primary px-3.5 py-2 text-sm text-app-primary-contrast;
-}
-
-.btn:disabled {
-  @apply cursor-not-allowed opacity-60;
-}
-
-.btn-secondary {
-  @apply bg-transparent text-app-primary;
-}
-
-.banner {
-  @apply px-4 py-2 text-center text-sm;
-}
-
-.banner-warning {
-  @apply border-b border-[#fde68a] bg-app-warn-bg text-app-warn;
-}
-
-.error {
-  @apply rounded-app border border-[#fecdca] bg-app-danger-bg px-4 py-3 text-app-danger;
-}
-
-.muted {
-  @apply text-app-muted;
-}
-
-.spinner {
-  @apply inline-block h-5 w-5 rounded-full border-[3px] border-app-border border-t-app-primary;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
+  /* Visible focus everywhere, including Windows forced-colors mode (outline, not shadow). */
+  :focus-visible {
+    outline: 3px solid var(--color-unc-navy);
+    outline-offset: 2px;
   }
 }
 
-.chat-log {
-  @apply mb-4 flex flex-col gap-3;
-}
-
-.msg {
-  @apply max-w-[85%] rounded-app px-3.5 py-2.5;
-  white-space: pre-wrap;
-}
-
-.msg-user {
-  @apply self-end bg-app-primary text-app-primary-contrast;
-}
-
-.msg-assistant {
-  @apply self-start bg-[#eef1f6];
-}
-
-.chat-form {
-  @apply flex gap-2;
-}
-
-.input {
-  @apply flex-1 rounded-app border border-app-border px-3 py-2 text-[0.95rem];
-}
-
-dl.kv {
-  @apply m-0 grid grid-cols-[140px_1fr] gap-x-4 gap-y-1.5;
-}
-
-dl.kv dt {
-  @apply text-app-muted;
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

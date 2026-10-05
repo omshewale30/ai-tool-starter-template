@@ -41,7 +41,10 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
 
     # ---- CORS ----
-    cors_allow_origins: str = "http://localhost:3000"
+    # Empty by default: browsers reach the API through the web app's same-origin
+    # /api/* forwarder, so no cross-origin access is needed. Set only if another
+    # origin must call the API directly from a browser.
+    cors_allow_origins: str = ""
 
     # ---- AI provider ----
     ai_provider: AIProviderName = AIProviderName.mock

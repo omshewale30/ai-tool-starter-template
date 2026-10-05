@@ -17,6 +17,8 @@
     ".github/workflows/*.yml",
     "scripts/*.sh",
     "scripts/*.py",
-    "scripts/tests/*"
+    "scripts/tests/*",
+    "web/package-lock.json",
+    "web/src/lib/api/schema.ts"
   ]
 }

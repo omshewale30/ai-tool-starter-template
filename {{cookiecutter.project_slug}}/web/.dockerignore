@@ -4,5 +4,7 @@ out
 coverage
 playwright-report
 test-results
-.env.local
+e2e
+.env*
+!.env.local.example
 npm-debug.log

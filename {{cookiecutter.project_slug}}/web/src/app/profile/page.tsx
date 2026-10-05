@@ -1,70 +1,50 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-
 import { ErrorState } from "@/components/ErrorState";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
-import { useApiClient } from "@/lib/api/useApiClient";
-import type { MeResponse } from "@/types";
+import { Alert } from "@/components/ui/Alert";
+import { Card } from "@/components/ui/Card";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Spinner } from "@/components/ui/Spinner";
+import type { ApiClient } from "@/lib/api/client";
+import { useApiResource } from "@/lib/api/useApiResource";
+
+const loadMe = (api: ApiClient) => api.getMe();
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid grid-cols-[8rem_1fr] gap-4 py-2">
+      <dt className="text-muted">{label}</dt>
+      <dd className="break-words">{value || "—"}</dd>
+    </div>
+  );
+}
 
 export default function ProfilePage() {
-  const api = useApiClient();
-  const [me, setMe] = useState<MeResponse | null>(null);
-  const [error, setError] = useState<unknown>(null);
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setMe(await api.getMe());
-    } catch (err) {
-      setError(err);
-    } finally {
-      setLoading(false);
-    }
-  }, [api]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const { data: me, error, reload } = useApiResource(loadMe);
 
   return (
     <>
-      <h1>Profile</h1>
-      <p className="muted">Identity and roles as resolved by the backend from your token.</p>
-
-      <div className="card">
-        {loading ? (
-          <LoadingSpinner label="Loading profile…" />
-        ) : error ? (
-          <ErrorState error={error} onRetry={load} />
-        ) : me ? (
-          <dl className="kv">
-            <dt>Name</dt>
-            <dd>{me.name || "—"}</dd>
-            <dt>Email</dt>
-            <dd>{me.email || "—"}</dd>
-            <dt>Subject</dt>
-            <dd>{me.subject}</dd>
-            <dt>Roles</dt>
-            <dd>{me.roles.length ? me.roles.join(", ") : "—"}</dd>
-            <dt>Groups</dt>
-            <dd>{me.groups.length ? me.groups.join(", ") : "—"}</dd>
-            <dt>Admin</dt>
-            <dd>{me.isAdmin ? "Yes" : "No"}</dd>
-          </dl>
-        ) : null}
-      </div>
-
+      <PageHeader title="Profile">Your identity and roles, as the API sees them.</PageHeader>
       {me?.isDevPrincipal ? (
-        <p className="muted">
-          <small>
-            This is a fake local-development principal (auth disabled). It does not represent a real
-            signed-in user.
-          </small>
-        </p>
+        <Alert tone="warning" className="mb-4">
+          This is a fake local-development identity (sign-in is disabled).
+        </Alert>
       ) : null}
+      <Card>
+        {error ? (
+          <ErrorState error={error} onRetry={reload} />
+        ) : !me ? (
+          <Spinner label="Loading profile…" />
+        ) : (
+          <dl className="divide-y divide-border">
+            <Row label="Name" value={me.name} />
+            <Row label="Email" value={me.email} />
+            <Row label="Object ID" value={me.subject} />
+            <Row label="App roles" value={me.roles.join(", ")} />
+            <Row label="Admin" value={me.isAdmin ? "Yes" : "No"} />
+          </dl>
+        )}
+      </Card>
     </>
   );
 }
