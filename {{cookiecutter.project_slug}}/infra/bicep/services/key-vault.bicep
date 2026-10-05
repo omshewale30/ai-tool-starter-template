@@ -17,7 +17,7 @@ param appPrincipalId string
 param appInsightsConnectionString string = ''
 
 @description('Object id of the CD pipeline identity (granted Key Vault Secrets Officer). Empty to skip.')
-param secretsOfficerPrincipalId string = ''
+param pipelinePrincipalId string = ''
 
 @description('Optional additional seed secrets (name -> value).')
 @secure()
@@ -51,7 +51,7 @@ module keyVault '../modules/key-vault.bicep' = {
     location: location
     tags: tags
     appPrincipalId: appPrincipalId
-    secretsOfficerPrincipalId: secretsOfficerPrincipalId
+    pipelinePrincipalId: pipelinePrincipalId
     seedSecrets: seedSecrets
   }
 }

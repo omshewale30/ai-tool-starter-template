@@ -12,7 +12,7 @@ param tags object = {}
 param appPrincipalId string
 
 @description('Object id of the CD pipeline identity that writes secrets. Empty to skip.')
-param secretsOfficerPrincipalId string = ''
+param pipelinePrincipalId string = ''
 
 @description('Optional seed secrets to create (name -> value). Only for values infra owns.')
 @secure()
@@ -51,11 +51,11 @@ resource secretsUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   }
 }
 
-resource secretsOfficer 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(secretsOfficerPrincipalId)) {
-  name: guid(keyVault.id, secretsOfficerPrincipalId, secretsOfficerRoleId)
+resource secretsOfficer 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(pipelinePrincipalId)) {
+  name: guid(keyVault.id, pipelinePrincipalId, secretsOfficerRoleId)
   scope: keyVault
   properties: {
-    principalId: secretsOfficerPrincipalId
+    principalId: pipelinePrincipalId
     principalType: 'ServicePrincipal'
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', secretsOfficerRoleId)
   }

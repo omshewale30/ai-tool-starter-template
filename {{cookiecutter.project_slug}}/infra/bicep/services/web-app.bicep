@@ -1,5 +1,12 @@
 targetScope = 'resourceGroup'
 
+// The web Container App: the only public endpoint. It serves the Next.js app and
+// forwards /api/* to the API's internal address (BACKEND_ORIGIN).
+//
+// Creates the app shell. After the first deploy, scripts/cd.sh owns the image and the
+// env (deploy/env-contract.json), re-deriving BACKEND_ORIGIN from the API app the same
+// way this template does.
+
 @description('Prefix for resource names.')
 param resourcePrefix string = '{{ cookiecutter.resource_prefix }}'
 
@@ -9,17 +16,11 @@ param environmentName string = 'dev'
 @description('Azure region for the resource.')
 param location string = resourceGroup().location
 
-@description('Microsoft Entra tenant id.')
-param tenantId string = '{{ cookiecutter.entra_tenant_id }}'
-
-@description('Frontend container image, e.g. myacr.azurecr.io/web:sha.')
-param image string
+@description('Bootstrap image; scripts/cd.sh replaces it with the published digest.')
+param image string = 'mcr.microsoft.com/k8se/quickstart:latest'
 
 @description('Container Apps managed environment resource id.')
 param environmentId string
-
-@description('Container Apps managed environment default domain.')
-param defaultDomain string
 
 @description('User-assigned managed identity resource id.')
 param userAssignedIdentityId string
@@ -27,14 +28,14 @@ param userAssignedIdentityId string
 @description('ACR login server, e.g. myacr.azurecr.io.')
 param registryServer string
 
-@description('Entra frontend (SPA) app registration client id.')
-param entraFrontendClientId string = '{{ cookiecutter.frontend_client_id }}'
+@description('Entra tenant id.')
+param tenantId string = '{{ cookiecutter.entra_tenant_id }}'
 
-@description('Entra backend app id URI used to request API scope.')
-param entraBackendAppIdUri string = '{{ cookiecutter.backend_app_id_uri }}'
+@description('Client id of the web (SPA) app registration.')
+param entraClientId string = '{{ cookiecutter.frontend_client_id }}'
 
-@description('Set true only for local/dev troubleshooting.')
-param authDisabled bool = false
+@description('Delegated API scope the web requests, e.g. api://<api client id>/access_as_user.')
+param entraApiScope string = '{{ cookiecutter.backend_app_id_uri }}/access_as_user'
 
 @description('Optional tags merged with default tags.')
 param extraTags object = {}
@@ -46,15 +47,16 @@ var defaultTags = {
 }
 var tags = union(defaultTags, extraTags)
 
-var apiAppName = 'ca-${namePrefix}-api'
-var webAppName = 'ca-${namePrefix}-web'
-var apiBaseUrl = 'https://${apiAppName}.${defaultDomain}'
-var webOrigin = 'https://${webAppName}.${defaultDomain}'
+// Read the API's real ingress FQDN: with internal ingress it is
+// <app>.internal.<environment domain>, so it must not be assembled from strings.
+resource apiApp 'Microsoft.App/containerApps@2024-03-01' existing = {
+  name: 'ca-${namePrefix}-api'
+}
 
 module webApp '../modules/container-app.bicep' = {
   name: 'web-app-${namePrefix}'
   params: {
-    name: webAppName
+    name: 'ca-${namePrefix}-web'
     location: location
     tags: tags
     environmentId: environmentId
@@ -63,18 +65,17 @@ module webApp '../modules/container-app.bicep' = {
     image: image
     targetPort: 3000
     external: true
+    livenessPath: '/healthz'
+    readinessPath: '/healthz'
     envVars: [
-      { name: 'NEXT_PUBLIC_API_BASE_URL', value: apiBaseUrl }
-      { name: 'NEXT_PUBLIC_AUTH_DISABLED', value: authDisabled ? 'true' : 'false' }
-      { name: 'NEXT_PUBLIC_ENTRA_CLIENT_ID', value: entraFrontendClientId }
-      { name: 'NEXT_PUBLIC_ENTRA_TENANT_ID', value: tenantId }
-      { name: 'NEXT_PUBLIC_ENTRA_REDIRECT_URI', value: webOrigin }
-      { name: 'NEXT_PUBLIC_ENTRA_API_SCOPE', value: '${entraBackendAppIdUri}/access_as_user' }
+      { name: 'BACKEND_ORIGIN', value: 'https://${apiApp.properties.configuration.ingress.fqdn}' }
+      { name: 'ENTRA_CLIENT_ID', value: entraClientId }
+      { name: 'ENTRA_TENANT_ID', value: tenantId }
+      { name: 'ENTRA_API_SCOPE', value: entraApiScope }
     ]
   }
 }
 
 output webAppName string = webApp.outputs.name
 output webFqdn string = webApp.outputs.fqdn
-output webUrl string = webOrigin
-output apiBaseUrl string = apiBaseUrl
+output webUrl string = 'https://${webApp.outputs.fqdn}'

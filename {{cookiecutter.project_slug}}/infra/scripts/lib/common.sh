@@ -114,3 +114,22 @@ print_outputs() {
   local deployment_json="$1"
   extract_outputs_json "$deployment_json" | jq .
 }
+
+# Container apps are created once by infra; afterwards scripts/cd.sh owns their image
+# and env. Re-running the Bicep would reset both (to the bootstrap image), so refuse
+# unless the caller asked for it explicitly.
+refuse_if_app_exists() {
+  local app_name="$1"
+  local resource_group="$2"
+  local recreate="$3"
+
+  if [[ "$recreate" == "true" ]]; then
+    return
+  fi
+  if az containerapp show --name "$app_name" --resource-group "$resource_group" --output none 2>/dev/null; then
+    echo "error: $app_name already exists. CD (scripts/cd.sh) owns its image and env now;" >&2
+    echo "       re-running this would reset both. Pass --recreate to do it anyway, then" >&2
+    echo "       re-run the CD workflow (workflow_dispatch) to redeploy main." >&2
+    exit 1
+  fi
+}

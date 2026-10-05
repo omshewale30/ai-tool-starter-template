@@ -18,6 +18,8 @@ Options:
   -l, --location <region>        Azure region (default: resource group location)
   -p, --resource-prefix <pref>   Resource prefix (default: {{ cookiecutter.resource_prefix }})
       --app-principal-id <id>    Managed identity principal id (defaults from state identity.principalId)
+      --pipeline-principal-id <id> CI/CD pipeline identity object id, granted AcrPush
+                                 (or DEPLOY_PRINCIPAL_ID env var)
   -s, --state-file <path>        Local state file path (default: infra/state/<rg>.json)
       --deployment-name <name>   Override ARM deployment name
   -h, --help                     Show this help text
@@ -29,6 +31,7 @@ ENVIRONMENT_NAME="dev"
 LOCATION=""
 RESOURCE_PREFIX="{{ cookiecutter.resource_prefix }}"
 APP_PRINCIPAL_ID=""
+PIPELINE_PRINCIPAL_ID="${DEPLOY_PRINCIPAL_ID:-}"
 STATE_FILE=""
 DEPLOYMENT_NAME=""
 
@@ -52,6 +55,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --app-principal-id)
       APP_PRINCIPAL_ID="$2"
+      shift 2
+      ;;
+    --pipeline-principal-id)
+      PIPELINE_PRINCIPAL_ID="$2"
       shift 2
       ;;
     -s|--state-file)
@@ -101,6 +108,7 @@ deployment_json="$(az deployment group create \
     environmentName="$ENVIRONMENT_NAME" \
     location="$LOCATION" \
     appPrincipalId="$APP_PRINCIPAL_ID" \
+    pipelinePrincipalId="$PIPELINE_PRINCIPAL_ID" \
   -o json)"
 
 save_service_outputs "$STATE_FILE" "registry" "$RESOURCE_GROUP" "$ENVIRONMENT_NAME" "$RESOURCE_PREFIX" "$deployment_json"

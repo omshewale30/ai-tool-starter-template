@@ -89,6 +89,9 @@ docker run --detach --name "${RUN_ID}-web" --network "$RUN_ID" \
 echo "::endgroup::"
 
 echo "::group::Assert health through the web"
+# The web's own probe endpoint (Container Apps liveness/readiness).
+curl --fail --silent --show-error --retry 30 --retry-delay 2 --retry-all-errors \
+  --output /dev/null "$WEB_URL/healthz"
 health="$(curl --fail --silent --show-error \
   --retry 60 --retry-delay 2 --retry-all-errors "$WEB_URL/api/health")"
 echo "health: $health"

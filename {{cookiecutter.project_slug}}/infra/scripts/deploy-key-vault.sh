@@ -19,7 +19,7 @@ Options:
   -p, --resource-prefix <pref>             Resource prefix (default: {{ cookiecutter.resource_prefix }})
       --app-principal-id <id>              Managed identity principal id (defaults from state identity.principalId)
       --appinsights-connection-string <v>  Optional seed secret value (defaults from state observability.appInsightsConnectionString)
-      --secrets-officer-principal-id <id>  CD pipeline identity object id; granted Key Vault Secrets
+      --pipeline-principal-id <id>        CD pipeline identity object id; granted Key Vault Secrets
                                            Officer so scripts/cd.sh can write database-url
                                            (or DEPLOY_PRINCIPAL_ID env var)
   -s, --state-file <path>                  Local state file path (default: infra/state/<rg>.json)
@@ -34,7 +34,7 @@ LOCATION=""
 RESOURCE_PREFIX="{{ cookiecutter.resource_prefix }}"
 APP_PRINCIPAL_ID=""
 APPINSIGHTS_CONNECTION_STRING=""
-SECRETS_OFFICER_PRINCIPAL_ID="${DEPLOY_PRINCIPAL_ID:-}"
+PIPELINE_PRINCIPAL_ID="${DEPLOY_PRINCIPAL_ID:-}"
 STATE_FILE=""
 DEPLOYMENT_NAME=""
 
@@ -64,8 +64,8 @@ while [[ $# -gt 0 ]]; do
       APPINSIGHTS_CONNECTION_STRING="$2"
       shift 2
       ;;
-    --secrets-officer-principal-id)
-      SECRETS_OFFICER_PRINCIPAL_ID="$2"
+    --pipeline-principal-id)
+      PIPELINE_PRINCIPAL_ID="$2"
       shift 2
       ;;
     -s|--state-file)
@@ -117,7 +117,7 @@ deployment_json="$(az deployment group create \
     location="$LOCATION" \
     appPrincipalId="$APP_PRINCIPAL_ID" \
     appInsightsConnectionString="$APPINSIGHTS_CONNECTION_STRING" \
-    secretsOfficerPrincipalId="$SECRETS_OFFICER_PRINCIPAL_ID" \
+    pipelinePrincipalId="$PIPELINE_PRINCIPAL_ID" \
   -o json)"
 
 save_service_outputs "$STATE_FILE" "keyVault" "$RESOURCE_GROUP" "$ENVIRONMENT_NAME" "$RESOURCE_PREFIX" "$deployment_json"

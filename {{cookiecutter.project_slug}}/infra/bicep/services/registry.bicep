@@ -12,6 +12,9 @@ param location string = resourceGroup().location
 @description('Principal id of the managed identity that pulls images.')
 param appPrincipalId string
 
+@description('Object id of the CI/CD pipeline identity (granted AcrPush). Empty to skip.')
+param pipelinePrincipalId string = ''
+
 @description('Optional tags merged with default tags.')
 param extraTags object = {}
 
@@ -29,6 +32,7 @@ module registry '../modules/registry.bicep' = {
     location: location
     tags: tags
     appPrincipalId: appPrincipalId
+    pipelinePrincipalId: pipelinePrincipalId
   }
 }
 
