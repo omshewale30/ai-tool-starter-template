@@ -33,8 +33,6 @@ Options:
       --identity-id <id>                 User-assigned identity id (defaults from state identity.id)
       --identity-client-id <id>          User-assigned identity client id (defaults from state identity.clientId)
       --registry-server <server>         ACR login server (defaults from state registry.loginServer)
-      --database-server-fqdn <host>      Database server FQDN (defaults from state postgres.serverFqdn)
-      --database-name <name>             Database name (defaults from state postgres.databaseName or appdb)
       --storage-blob-endpoint <url>      Blob endpoint (defaults from state storage.blobEndpoint)
       --storage-container-name <name>    Blob container name (defaults from state storage.containerName)
       --key-vault-uri <uri>              Key Vault URI (defaults from state keyVault.keyVaultUri)
@@ -64,8 +62,6 @@ DEFAULT_DOMAIN=""
 IDENTITY_ID=""
 IDENTITY_CLIENT_ID=""
 REGISTRY_SERVER=""
-DATABASE_SERVER_FQDN=""
-DATABASE_NAME=""
 STORAGE_BLOB_ENDPOINT=""
 STORAGE_CONTAINER_NAME=""
 KEY_VAULT_URI=""
@@ -154,14 +150,6 @@ while [[ $# -gt 0 ]]; do
       REGISTRY_SERVER="$2"
       shift 2
       ;;
-    --database-server-fqdn)
-      DATABASE_SERVER_FQDN="$2"
-      shift 2
-      ;;
-    --database-name)
-      DATABASE_NAME="$2"
-      shift 2
-      ;;
     --storage-blob-endpoint)
       STORAGE_BLOB_ENDPOINT="$2"
       shift 2
@@ -229,18 +217,11 @@ DEFAULT_DOMAIN="$(resolve_required_value "$DEFAULT_DOMAIN" "$STATE_FILE" '.servi
 IDENTITY_ID="$(resolve_required_value "$IDENTITY_ID" "$STATE_FILE" '.services.identity.id' '--identity-id')"
 IDENTITY_CLIENT_ID="$(resolve_required_value "$IDENTITY_CLIENT_ID" "$STATE_FILE" '.services.identity.clientId' '--identity-client-id')"
 REGISTRY_SERVER="$(resolve_required_value "$REGISTRY_SERVER" "$STATE_FILE" '.services.registry.loginServer' '--registry-server')"
-DATABASE_SERVER_FQDN="$(resolve_required_value "$DATABASE_SERVER_FQDN" "$STATE_FILE" '.services.postgres.serverFqdn' '--database-server-fqdn')"
 STORAGE_BLOB_ENDPOINT="$(resolve_required_value "$STORAGE_BLOB_ENDPOINT" "$STATE_FILE" '.services.storage.blobEndpoint' '--storage-blob-endpoint')"
 STORAGE_CONTAINER_NAME="$(resolve_required_value "$STORAGE_CONTAINER_NAME" "$STATE_FILE" '.services.storage.containerName' '--storage-container-name')"
 KEY_VAULT_URI="$(resolve_required_value "$KEY_VAULT_URI" "$STATE_FILE" '.services.keyVault.keyVaultUri' '--key-vault-uri')"
 SEARCH_ENDPOINT="$(resolve_optional_value "$SEARCH_ENDPOINT" "$STATE_FILE" '.services.search.searchEndpoint')"
 
-if [[ -z "$DATABASE_NAME" ]]; then
-  DATABASE_NAME="$(resolve_optional_value "$DATABASE_NAME" "$STATE_FILE" '.services.postgres.databaseName')"
-fi
-if [[ -z "$DATABASE_NAME" || "$DATABASE_NAME" == "null" ]]; then
-  DATABASE_NAME="appdb"
-fi
 
 LOCATION="$(resolve_location "$RESOURCE_GROUP" "$LOCATION")"
 DEPLOYMENT_NAME="${DEPLOYMENT_NAME:-$(new_deployment_name api-app "$ENVIRONMENT_NAME")}"
@@ -260,8 +241,6 @@ deployment_json="$(az deployment group create \
     userAssignedIdentityId="$IDENTITY_ID" \
     userAssignedIdentityClientId="$IDENTITY_CLIENT_ID" \
     registryServer="$REGISTRY_SERVER" \
-    databaseServerFqdn="$DATABASE_SERVER_FQDN" \
-    databaseName="$DATABASE_NAME" \
     storageBlobEndpoint="$STORAGE_BLOB_ENDPOINT" \
     storageContainerName="$STORAGE_CONTAINER_NAME" \
     keyVaultUri="$KEY_VAULT_URI" \

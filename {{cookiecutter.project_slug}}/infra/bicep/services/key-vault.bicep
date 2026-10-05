@@ -16,9 +16,8 @@ param appPrincipalId string
 @secure()
 param appInsightsConnectionString string = ''
 
-@description('Optional SQL admin password to seed as sql-admin-password.')
-@secure()
-param sqlAdminPassword string = ''
+@description('Object id of the CD pipeline identity (granted Key Vault Secrets Officer). Empty to skip.')
+param secretsOfficerPrincipalId string = ''
 
 @description('Optional additional seed secrets (name -> value).')
 @secure()
@@ -34,18 +33,14 @@ var defaultTags = {
 }
 var tags = union(defaultTags, extraTags)
 
-var builtInSeedSecrets = union(
-  empty(appInsightsConnectionString)
-    ? {}
-    : {
-        'appinsights-connection-string': appInsightsConnectionString
-      },
-  empty(sqlAdminPassword)
-    ? {}
-    : {
-        'sql-admin-password': sqlAdminPassword
-      }
-)
+// Infra seeds only the values it owns. Application secrets such as
+// `database-url` are written by scripts/cd.sh from GitHub environment secrets, so
+// re-running this deployment never overwrites them.
+var builtInSeedSecrets = empty(appInsightsConnectionString)
+  ? {}
+  : {
+      'appinsights-connection-string': appInsightsConnectionString
+    }
 
 var seedSecrets = union(builtInSeedSecrets, additionalSeedSecrets)
 
@@ -56,6 +51,7 @@ module keyVault '../modules/key-vault.bicep' = {
     location: location
     tags: tags
     appPrincipalId: appPrincipalId
+    secretsOfficerPrincipalId: secretsOfficerPrincipalId
     seedSecrets: seedSecrets
   }
 }

@@ -11,6 +11,8 @@ dependencies = [
     "python-json-logger>=2.0",
     "sqlalchemy>=2.0",
     "alembic>=1.13",
+    # PostgreSQL driver (Azure Database for PostgreSQL Flexible Server)
+    "psycopg[binary]>=3.2",
     # JWT validation for Microsoft Entra ID
     "pyjwt[crypto]>=2.8",
     "httpx>=0.27",
@@ -30,10 +32,6 @@ foundry = [
 ]
 search = [
     "azure-search-documents>=11.5",
-]
-sqlserver = [
-    # Azure SQL / SQL Server driver (needs ODBC Driver 18 on the host/image)
-    "pyodbc>=5.1",
 ]
 dev = [
     "pytest>=8.2",

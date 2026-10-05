@@ -1,30 +1,26 @@
-# {{ cookiecutter.project_name }} backend image.
-FROM python:3.11-slim AS base
+# {{ cookiecutter.project_name }} API image.
+#
+# Environment-agnostic: all configuration arrives as environment variables at
+# run time (see deploy/env-contract.json), so one image digest is promoted
+# across environments.
+FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
-
-# ODBC Driver 18 for SQL Server (required by pyodbc for Azure SQL).
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl gnupg apt-transport-https ca-certificates unixodbc-dev \
-    && curl -sSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg \
-    && curl -sSL https://packages.microsoft.com/config/debian/12/prod.list \
-        | sed 's|https://|[signed-by=/usr/share/keyrings/microsoft-prod.gpg] https://|' \
-        > /etc/apt/sources.list.d/mssql-release.list \
-    && apt-get update \
-    && ACCEPT_EULA=Y apt-get install -y --no-install-recommends msodbcsql18 \
-    && rm -rf /var/lib/apt/lists/*
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
 
 WORKDIR /app
 
-# Install dependencies first for better layer caching.
-COPY pyproject.toml ./
-COPY alembic.ini ./
+COPY pyproject.toml alembic.ini ./
 COPY app ./app
-RUN pip install --upgrade pip && pip install ".[sqlserver,foundry]"
+RUN pip install ".[foundry]" \
+    && useradd --system --uid 1001 --no-create-home appuser
 
+USER appuser
 EXPOSE 8000
 
-# 4 workers is a reasonable default for Container Apps; tune per workload.
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+# Migrations are fail-closed: serving on the wrong schema is worse than not
+# serving. Container Apps retries the revision until the database is reachable.
+# Tune --workers per workload (each worker holds its own DB pool).
+CMD ["/bin/sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --proxy-headers --forwarded-allow-ips='*'"]

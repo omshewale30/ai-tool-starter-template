@@ -23,9 +23,10 @@ def get_engine() -> Engine:
         connect_args["check_same_thread"] = False
     return create_engine(
         settings.database_url,
+        # Survive idle-connection drops (Azure closes idle connections).
         pool_pre_ping=True,
+        pool_recycle=1800,
         connect_args=connect_args,
-        future=True,
     )
 
 

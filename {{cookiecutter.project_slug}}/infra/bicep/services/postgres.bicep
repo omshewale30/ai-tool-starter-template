@@ -1,7 +1,9 @@
 targetScope = 'resourceGroup'
 
-// Service entrypoint name matches the deployment workflow's "postgres" step.
-// It currently reuses the existing Azure SQL module for the app database.
+// PostgreSQL Flexible Server for the API. After deploying, store the full
+// connection URL as the `DATABASE_URL` secret of the GitHub `dev` environment;
+// `scripts/cd.sh` writes it to Key Vault as `database-url` (see docs/runbook.md):
+//   postgresql+psycopg://<adminLogin>:<password>@<serverFqdn>:5432/<databaseName>?sslmode=require
 
 @description('Prefix for resource names.')
 param resourcePrefix string = '{{ cookiecutter.resource_prefix }}'
@@ -12,18 +14,12 @@ param environmentName string = 'dev'
 @description('Azure region for the resource.')
 param location string = resourceGroup().location
 
-@description('SQL administrator login name.')
-param sqlAdminLogin string = '${resourcePrefix}admin'
+@description('PostgreSQL administrator login name.')
+param adminLogin string = '${resourcePrefix}admin'
 
-@description('SQL administrator password (provide via secure pipeline or env var).')
+@description('PostgreSQL administrator password (letters and digits; supply at deploy time).')
 @secure()
-param sqlAdminPassword string
-
-@description('Entra admin object id (managed identity principal id or group object id).')
-param entraAdminObjectId string = ''
-
-@description('Entra admin display name.')
-param entraAdminLogin string = 'sql-admins'
+param adminPassword string
 
 @description('Database name.')
 param databaseName string = 'appdb'
@@ -38,20 +34,19 @@ var defaultTags = {
 }
 var tags = union(defaultTags, extraTags)
 
-module sql '../modules/sql.bicep' = {
+module postgres '../modules/postgres.bicep' = {
   name: 'postgres-${namePrefix}'
   params: {
     namePrefix: namePrefix
     location: location
     tags: tags
-    sqlAdminLogin: sqlAdminLogin
-    sqlAdminPassword: sqlAdminPassword
-    entraAdminObjectId: entraAdminObjectId
-    entraAdminLogin: entraAdminLogin
+    adminLogin: adminLogin
+    adminPassword: adminPassword
     databaseName: databaseName
   }
 }
 
-output serverName string = sql.outputs.serverName
-output serverFqdn string = sql.outputs.serverFqdn
-output databaseName string = sql.outputs.databaseName
+output serverName string = postgres.outputs.serverName
+output serverFqdn string = postgres.outputs.serverFqdn
+output databaseName string = postgres.outputs.databaseName
+output adminLogin string = adminLogin

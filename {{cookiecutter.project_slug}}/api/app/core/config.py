@@ -59,6 +59,8 @@ class Settings(BaseSettings):
     jwt_leeway_seconds: int = 60
 
     # ---- Database ----
+    # PostgreSQL in Azure and docker-compose; SQLite for tests. A plain
+    # `postgres://` or `postgresql://` URL is accepted and mapped to psycopg.
     database_url: str = "sqlite+pysqlite:///./local.db"
 
     # ---- Azure AI Foundry (only used when ai_provider == foundry) ----
@@ -100,6 +102,14 @@ class Settings(BaseSettings):
     @classmethod
     def _normalize_env(cls, v: str) -> str:
         return v.strip().lower()
+
+    @field_validator("database_url")
+    @classmethod
+    def _use_psycopg_driver(cls, v: str) -> str:
+        for prefix in ("postgres://", "postgresql://"):
+            if v.startswith(prefix):
+                return "postgresql+psycopg://" + v[len(prefix) :]
+        return v
 
     @model_validator(mode="after")
     def _validate_security_invariants(self) -> Settings:

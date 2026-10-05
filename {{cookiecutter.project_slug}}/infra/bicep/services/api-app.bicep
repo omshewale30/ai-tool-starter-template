@@ -30,12 +30,6 @@ param userAssignedIdentityClientId string
 @description('ACR login server, e.g. myacr.azurecr.io.')
 param registryServer string
 
-@description('Database server FQDN.')
-param databaseServerFqdn string
-
-@description('Database name.')
-param databaseName string = 'appdb'
-
 @description('Storage blob endpoint URL.')
 param storageBlobEndpoint string
 
@@ -90,7 +84,8 @@ var apiFqdn = '${apiAppName}.${defaultDomain}'
 var apiUrl = 'https://${apiFqdn}'
 var webOrigin = 'https://${webAppName}.${defaultDomain}'
 
-var databaseUrl = 'mssql+pyodbc://@${databaseServerFqdn}:1433/${databaseName}?driver=ODBC+Driver+18+for+SQL+Server&Authentication=ActiveDirectoryMsi&Encrypt=yes'
+// DATABASE_URL comes from the Key Vault secret `database-url`, owned by scripts/cd.sh.
+var databaseUrlSecretUrl = '${keyVaultUri}secrets/database-url'
 var appInsightsSecretUrl = '${keyVaultUri}secrets/appinsights-connection-string'
 
 module apiApp '../modules/container-app.bicep' = {
@@ -114,7 +109,6 @@ module apiApp '../modules/container-app.bicep' = {
       { name: 'ENTRA_BACKEND_APP_ID_URI', value: entraBackendAppIdUri }
       { name: 'ADMIN_GROUP_ID', value: adminGroupId }
       { name: 'CORS_ALLOW_ORIGINS', value: webOrigin }
-      { name: 'DATABASE_URL', value: databaseUrl }
       { name: 'AZURE_STORAGE_ACCOUNT_URL', value: storageBlobEndpoint }
       { name: 'AZURE_STORAGE_CONTAINER', value: storageContainerName }
       { name: 'AZURE_AI_FOUNDRY_ENDPOINT', value: foundryEndpoint }
@@ -125,9 +119,11 @@ module apiApp '../modules/container-app.bicep' = {
     ]
     secretRefs: [
       { name: 'appinsights-connection-string', keyVaultUrl: appInsightsSecretUrl }
+      { name: 'database-url', keyVaultUrl: databaseUrlSecretUrl }
     ]
     secretEnvVars: [
       { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', secretRef: 'appinsights-connection-string' }
+      { name: 'DATABASE_URL', secretRef: 'database-url' }
     ]
   }
 }
