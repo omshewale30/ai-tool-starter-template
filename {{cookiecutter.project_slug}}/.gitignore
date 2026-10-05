@@ -44,3 +44,4 @@ infra/bicep/services/*.json
 
 # Next.js generates this on every build/typegen
 next-env.d.ts
+*.tsbuildinfo

@@ -22,9 +22,15 @@ export DATABASE_URL="sqlite+pysqlite:///:memory:"
 check_backend() {
   (
     cd api
-    ruff check app
+    ruff check app scripts
     pytest
   )
+  # The deploy scripts are part of the product: syntax, renderer, contract, and cd.sh
+  # end to end against fake az/gh/curl (no Azure).
+  for script in scripts/*.sh infra/scripts/*.sh infra/scripts/lib/*.sh; do
+    bash -n "$script"
+  done
+  python -m unittest discover --start-directory scripts/tests --pattern 'test_*.py'
 }
 
 check_frontend() {

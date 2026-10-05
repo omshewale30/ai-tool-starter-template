@@ -114,6 +114,15 @@ verify_variant() {
       echo "skipped: docker is not available"
     fi
 
+    log "[$slug] actionlint"
+    if command -v actionlint >/dev/null 2>&1; then
+      actionlint .github/workflows/*.yml
+    elif command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+      docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:latest .github/workflows/*.yml
+    else
+      echo "skipped: neither actionlint nor a running docker is available"
+    fi
+
     if [[ "$RUN_DOCKER" == "1" ]]; then
       log "[$slug] build images + smoke test"
       docker build -q -t "$slug-api:verify" api >/dev/null
