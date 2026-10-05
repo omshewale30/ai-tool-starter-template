@@ -24,36 +24,36 @@ logs: ## Tail logs from the local stack
 	docker compose logs -f
 
 install-api: ## Install backend dependencies into a venv
-	cd apps/api && $(PYTHON) -m venv .venv && . .venv/bin/activate && pip install -e ".[dev]"
+	cd api && $(PYTHON) -m venv .venv && . .venv/bin/activate && pip install -e ".[dev]"
 
 install-web: ## Install frontend dependencies
-	cd apps/web && npm install
+	cd web && npm install
 
 api: ## Run the backend with autoreload (needs a reachable DB)
-	cd apps/api && . .venv/bin/activate && uvicorn app.main:app --reload
+	cd api && . .venv/bin/activate && uvicorn app.main:app --reload
 
 web: ## Run the frontend dev server
-	cd apps/web && npm run dev
+	cd web && npm run dev
 
 migrate: ## Apply database migrations
-	cd apps/api && . .venv/bin/activate && alembic upgrade head
+	cd api && . .venv/bin/activate && alembic upgrade head
 
 test: test-api test-web ## Run all unit/component tests
 
 test-api: ## Run backend tests (mock AI, in-memory DB)
-	cd apps/api && . .venv/bin/activate && pytest
+	cd api && . .venv/bin/activate && pytest
 
 test-web: ## Run frontend unit/component tests
-	cd apps/web && npm run test
+	cd web && npm run test
 
 e2e: ## Run Playwright smoke tests
-	cd apps/web && npm run test:e2e
+	cd web && npm run test:e2e
 
 lint: ## Lint frontend
-	cd apps/web && npm run lint
+	cd web && npm run lint
 
 typecheck: ## Type-check frontend
-	cd apps/web && npm run typecheck
+	cd web && npm run typecheck
 
 fmt: ## Format backend (ruff)
-	cd apps/api && . .venv/bin/activate && ruff format app && ruff check --fix app
+	cd api && . .venv/bin/activate && ruff format app && ruff check --fix app

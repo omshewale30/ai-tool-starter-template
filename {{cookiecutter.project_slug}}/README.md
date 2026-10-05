@@ -95,7 +95,7 @@ docker compose up --build
 ## Environment variables
 
 Copy `.env.example` to `.env` and adjust. Frontend-specific values live in
-`apps/web/.env.local.example`. Key variables:
+`web/.env.local.example`. Key variables:
 
 | Variable | Where | Default (local) | Purpose |
 | --- | --- | --- | --- |
@@ -117,7 +117,7 @@ Full list with descriptions is in `.env.example`.
 ## Running the backend
 
 ```bash
-cd apps/api
+cd api
 python3.11 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 alembic upgrade head           # apply migrations (needs a reachable DB)
@@ -127,27 +127,27 @@ uvicorn app.main:app --reload  # http://localhost:8000  (docs at /docs)
 ## Running the frontend
 
 ```bash
-cd apps/web
+cd web
 cp .env.local.example .env.local
 npm install
 npm run dev                    # http://localhost:3000
 ```
 
 Tailwind CSS is enabled by default. Customize the starter theme tokens in
-`apps/web/src/app/globals.css`, then use Tailwind utility classes in your
+`web/src/app/globals.css`, then use Tailwind utility classes in your
 components.
 
 ## Running tests
 
 ```bash
 # Backend
-cd apps/api && pytest
+cd api && pytest
 
 # Frontend unit/component tests
-cd apps/web && npm run test
+cd web && npm run test
 
 # Frontend E2E smoke test (Playwright)
-cd apps/web && npx playwright install --with-deps && npm run test:e2e
+cd web && npx playwright install --with-deps && npm run test:e2e
 ```
 
 Backend tests use the **mock AI provider** and an in-memory SQLite database, so
@@ -217,7 +217,7 @@ cookiecutter path/to/ai-tool-starter
 - Replace every placeholder GUID (`00000000-...`) with real Entra/Azure values,
   supplied via env vars or Key Vault — never commit them.
 - Set `AUTH_MODE=entra` and `AI_PROVIDER=foundry` outside local dev.
-- Review `apps/api/app/services/ai/foundry_provider.py` and pin the AI SDK
+- Review `api/app/services/ai/foundry_provider.py` and pin the AI SDK
   version you deploy against.
 - Set real `resource_prefix`, region, and SQL admin credentials in Bicep params
   (via Key Vault / pipeline secrets).

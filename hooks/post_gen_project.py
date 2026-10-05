@@ -20,7 +20,7 @@ if not ENABLE_SEARCH:
     # Remove the optional backend search service. The Bicep search module is
     # kept but gated by the `enableSearch` parameter (false by default), so the
     # infrastructure stays internally consistent whether or not it's deployed.
-    remove(os.path.join("apps", "api", "app", "services", "search"))
+    remove(os.path.join("api", "app", "services", "search"))
 
 print("")
 print("Project generated. Next steps:")

@@ -65,6 +65,16 @@ verify_variant() {
     return 1
   fi
 
+  # Opt-out variants must not carry the optional code paths.
+  if [[ "$search" == "no" && -e "$project/api/app/services/search" ]]; then
+    echo "error: enable_ai_search=no but api/app/services/search was generated" >&2
+    return 1
+  fi
+  if [[ "$search" == "yes" && ! -e "$project/api/app/services/search" ]]; then
+    echo "error: enable_ai_search=yes but api/app/services/search is missing" >&2
+    return 1
+  fi
+
   (
     cd "$project"
     git init -q
@@ -76,11 +86,11 @@ verify_variant() {
     # shellcheck disable=SC1091
     . .venv/bin/activate
     python -m pip install -q --upgrade pip
-    python -m pip install -q -e "./apps/api[dev]"
-    if [[ -f apps/web/package-lock.json ]]; then
-      npm --prefix apps/web ci --no-audit --no-fund
+    python -m pip install -q -e "./api[dev]"
+    if [[ -f web/package-lock.json ]]; then
+      npm --prefix web ci --no-audit --no-fund
     else
-      npm --prefix apps/web install --no-audit --no-fund
+      npm --prefix web install --no-audit --no-fund
     fi
 
     log "[$slug] scripts/ci.sh backend"
@@ -106,8 +116,8 @@ verify_variant() {
 
     if [[ "$RUN_DOCKER" == "1" ]]; then
       log "[$slug] build images + smoke test"
-      docker build -q -t "$slug-api:verify" apps/api >/dev/null
-      docker build -q -t "$slug-web:verify" apps/web >/dev/null
+      docker build -q -t "$slug-api:verify" api >/dev/null
+      docker build -q -t "$slug-web:verify" web >/dev/null
       if [[ -f scripts/smoke.sh ]]; then
         IMAGE_PREFIX="$slug" bash scripts/smoke.sh "$slug-api:verify" "$slug-web:verify"
       else

@@ -40,6 +40,6 @@ done
 
 1. Rename the top-level project directory to your slug.
 2. If you don't need Azure AI Search, delete
-   `apps/api/app/services/search/` and `infra/bicep/modules/search.bicep`.
+   `api/app/services/search/` and `infra/bicep/modules/search.bicep`.
 3. Fill in real GUIDs via environment variables / Key Vault — **do not** commit
    real tenant or client secrets. See `docs/security.md`.

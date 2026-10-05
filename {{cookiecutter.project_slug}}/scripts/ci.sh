@@ -21,7 +21,7 @@ export DATABASE_URL="sqlite+pysqlite:///:memory:"
 
 check_backend() {
   (
-    cd apps/api
+    cd api
     ruff check app
     pytest
   )
@@ -29,7 +29,7 @@ check_backend() {
 
 check_frontend() {
   (
-    cd apps/web
+    cd web
     npm run lint
     npm run typecheck
     npm test

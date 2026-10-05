@@ -66,9 +66,8 @@ ai-tool-starter/
   hooks/                            # pre/post generation validation
   TEMPLATE_USAGE.md
   {{cookiecutter.project_slug}}/    # <-- the generated project lives here
-    apps/web/                       # Next.js frontend
-    apps/api/                       # FastAPI backend
-    packages/api-client/            # shared typed API client types
+    web/                       # Next.js frontend
+    api/                       # FastAPI backend
     infra/bicep/                    # Azure infrastructure
     docs/                           # architecture, security, runbook, ADRs
     .github/workflows/              # CI + deploy

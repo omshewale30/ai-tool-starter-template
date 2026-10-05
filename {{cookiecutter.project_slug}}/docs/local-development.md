@@ -28,7 +28,7 @@ make dev            # or: docker compose up --build
 Backend:
 
 ```bash
-cd apps/api
+cd api
 python3.11 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 export AI_PROVIDER=mock AUTH_MODE=disabled DATABASE_URL="sqlite+pysqlite:///./local.db"
@@ -39,14 +39,14 @@ uvicorn app.main:app --reload
 Frontend:
 
 ```bash
-cd apps/web
+cd web
 cp .env.local.example .env.local
 npm install
 npm run dev
 ```
 
 The frontend includes Tailwind CSS. Theme tokens live in
-`apps/web/src/app/globals.css` so generated projects can adjust colors, radius,
+`web/src/app/globals.css` so generated projects can adjust colors, radius,
 and related utilities without adding extra config files.
 
 ## Mock AI mode
@@ -71,13 +71,13 @@ values.
 
 ```bash
 # Backend (mock AI + in-memory SQLite; no Azure needed)
-cd apps/api && pytest
+cd api && pytest
 
 # Frontend unit/component tests
-cd apps/web && npm run test
+cd web && npm run test
 
 # Frontend E2E smoke test (installs a browser on first run)
-cd apps/web && npx playwright install --with-deps && npm run test:e2e
+cd web && npx playwright install --with-deps && npm run test:e2e
 ```
 
 ## Common local issues

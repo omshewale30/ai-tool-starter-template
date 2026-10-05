@@ -8,7 +8,7 @@
   "entra_tenant_id": "00000000-0000-0000-0000-000000000000",
   "frontend_client_id": "00000000-0000-0000-0000-000000000000",
   "backend_client_id": "00000000-0000-0000-0000-000000000000",
-  "backend_app_id_uri": "api://{{ cookiecutter.project_slug }}",
+  "backend_app_id_uri": "api://{{ cookiecutter.backend_client_id }}",
   "enable_ai_search": [
     "no",
     "yes"
