@@ -39,3 +39,11 @@ test("streamed answers arrive through the proxy as server-sent events", async ({
   expect(body).toContain("event: delta");
   expect(body.trim().split("\n\n").at(-1)).toContain("event: done");
 });
+
+test("admins see AI usage in the activity log", async ({ page, request }) => {
+  await request.post("/api/v1/chat", { data: { message: "log me" } });
+  await page.goto("/admin");
+  await expect(page.getByRole("table", { name: "Recent audit events" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "chat.completed" }).first()).toBeVisible();
+  await expect(page.getByText(/mock-1 · \d+ in \/ \d+ out/).first()).toBeVisible();
+});

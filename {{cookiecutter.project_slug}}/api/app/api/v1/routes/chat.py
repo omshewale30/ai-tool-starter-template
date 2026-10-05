@@ -7,7 +7,6 @@ is described in app/services/ai/streaming.py.
 
 from __future__ import annotations
 
-import time
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
@@ -24,6 +23,7 @@ from app.services.ai.factory import AI
 from app.services.ai.streaming import stream_chat_response, usage_detail
 from app.services.audit import record_event
 from app.services.identity.current_user import CurrentUser
+from app.services.telemetry import AISpan
 
 router = APIRouter(tags=["chat"])
 
@@ -57,13 +57,18 @@ async def chat(
     db: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> ChatResponse:
-    start = time.perf_counter()
-    result = await ai.chat(conversation(_assistant_prompt(settings), payload))
+    span = AISpan("chat", provider=ai.name)
+    try:
+        result = await ai.chat(conversation(_assistant_prompt(settings), payload))
+    except Exception as exc:
+        span.fail(exc)
+        raise
+    span.finish(model=result.model, usage=result.usage)
     record_event(
         db,
         action="chat.completed",
         actor=user,
-        detail=usage_detail(ai.name, result.model, result.usage, time.perf_counter() - start),
+        detail=usage_detail(ai.name, result.model, result.usage, span.elapsed),
     )
     return ChatResponse(response=result.content, model=result.model)
 

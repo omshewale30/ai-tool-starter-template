@@ -5,7 +5,7 @@ Usage in routes:
     @router.get("/me")
     def me(user: Principal = Depends(get_current_user)): ...
 
-    @router.get("/admin/example")
+    @router.get("/admin/audit-events")
     def admin(user: Principal = Depends(require_admin)): ...
 """
 from __future__ import annotations

@@ -15,7 +15,6 @@ request-scoped one is closed by then), and records usage, never content.
 from __future__ import annotations
 
 import json
-import time
 from collections.abc import AsyncIterator, Sequence
 from typing import Any
 
@@ -27,6 +26,7 @@ from app.core.logging import correlation_id_ctx, get_logger
 from app.core.security import Principal
 from app.services.ai.base import AIProvider, ChatMessage, Usage
 from app.services.audit import record_event
+from app.services.telemetry import AISpan
 
 logger = get_logger(__name__)
 
@@ -69,7 +69,8 @@ def stream_chat_response(
     """Stream `ai.stream_chat(messages)` as SSE; audit `<action>.completed|failed|cancelled`."""
 
     async def events() -> AsyncIterator[str]:
-        start = time.perf_counter()
+        span = AISpan(f"{action}.stream", provider=ai.name)
+        failure: BaseException | None = None
         # Stays "cancelled" if the client disconnects (the generator is closed mid-stream).
         outcome, model, usage = f"{action}.stream_cancelled", None, None
         try:
@@ -93,20 +94,19 @@ def stream_chat_response(
                     },
                 )
         except AppError as exc:
-            outcome = f"{action}.stream_failed"
+            outcome, failure = f"{action}.stream_failed", exc
             # Headers are already sent, so the failure travels as an event.
             yield _error(exc.code, exc.message)
-        except Exception:  # noqa: BLE001 — never leak internals into the stream
-            outcome = f"{action}.stream_failed"
+        except Exception as exc:  # noqa: BLE001 — never leak internals into the stream
+            outcome, failure = f"{action}.stream_failed", exc
             logger.exception("Streaming %s failed", action)
             yield _error("internal_error", "An unexpected error occurred")
         finally:
-            _record(
-                sessions,
-                user,
-                outcome,
-                usage_detail(ai.name, model, usage, time.perf_counter() - start),
-            )
+            if outcome.endswith(".completed"):
+                span.finish(model=model, usage=usage)
+            else:
+                span.fail(failure, outcome=outcome.rsplit(".", 1)[-1])
+            _record(sessions, user, outcome, usage_detail(ai.name, model, usage, span.elapsed))
 
     return StreamingResponse(events(), media_type="text/event-stream", headers=SSE_HEADERS)
 

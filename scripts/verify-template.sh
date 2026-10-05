@@ -41,6 +41,15 @@ cookiecutter_cmd() {
   fi
 }
 
+# Cookiecutter renders every file under the template directory, including ignored
+# ones (caches, node_modules), which breaks rendering or bloats every project.
+ignored="$(git -C "$TEMPLATE_ROOT" status --porcelain --ignored -- '{{cookiecutter.project_slug}}' | sed -n 's/^!! //p')"
+if [[ -n "$ignored" ]]; then
+  echo "error: remove ignored files from the template directory before rendering:" >&2
+  echo "$ignored" >&2
+  exit 1
+fi
+
 OUT_DIR="${OUT_DIR:-$(mktemp -d)}"
 mkdir -p "$OUT_DIR"
 if [[ "$KEEP" == "0" ]]; then

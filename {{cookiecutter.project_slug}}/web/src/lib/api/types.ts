@@ -9,3 +9,4 @@ export type ChatTurn = Schemas["ChatTurn"];
 export type ChatResponse = Schemas["ChatResponse"];
 export type ErrorResponse = Schemas["ErrorResponse"];
 export type DeploymentHealth = Schemas["DeploymentHealth"];
+export type AuditEvent = Schemas["AuditEventOut"];

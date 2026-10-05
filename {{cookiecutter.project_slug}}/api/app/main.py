@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
+import fastapi
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -16,9 +17,12 @@ from app.core.config import get_settings
 from app.core.errors import register_error_handlers
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import CorrelationIdMiddleware
+from app.services.telemetry import configure_telemetry
 
 settings = get_settings()
 configure_logging(settings.log_level)
+# Before create_app(): the FastAPI instrumentation patches the class it constructs.
+configure_telemetry(settings)
 logger = get_logger("app.main")
 
 
@@ -38,17 +42,6 @@ async def lifespan(_: FastAPI):
             "AUTH_MODE=disabled — authentication is BYPASSED. "
             "Use only for local development."
         )
-    # Optional: enable Azure Monitor OpenTelemetry when configured.
-    if settings.applicationinsights_connection_string:
-        try:
-            from azure.monitor.opentelemetry import configure_azure_monitor
-
-            configure_azure_monitor(
-                connection_string=settings.applicationinsights_connection_string
-            )
-            logger.info("Azure Monitor OpenTelemetry enabled")
-        except Exception:  # noqa: BLE001
-            logger.exception("Failed to configure Azure Monitor; continuing without it")
     yield
 
 
@@ -57,7 +50,9 @@ def create_app() -> FastAPI:
     # web app in Azure; the OpenAPI document is still generated for the
     # frontend's typed client (see scripts/export_openapi.py).
     docs_enabled = settings.environment in {"local", "test"}
-    app = FastAPI(
+    # `fastapi.FastAPI`, looked up now: telemetry instrumentation replaces that class,
+    # and the name imported at the top of this module would still be the original.
+    app = fastapi.FastAPI(
         title=settings.app_name,
         version="0.1.0",
         description="{{ cookiecutter.project_description }}",

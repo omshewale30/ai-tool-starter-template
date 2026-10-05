@@ -2,6 +2,7 @@
 
 import { ErrorState } from "@/components/ErrorState";
 import { Alert } from "@/components/ui/Alert";
+import { ButtonLink } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Spinner } from "@/components/ui/Spinner";
@@ -44,6 +45,11 @@ export default function ProfilePage() {
             <Row label="Admin" value={me.isAdmin ? "Yes" : "No"} />
           </dl>
         )}
+        {me?.isAdmin ? (
+          <ButtonLink href="/admin" variant="secondary" className="mt-4">
+            Open admin
+          </ButtonLink>
+        ) : null}
       </Card>
     </>
   );

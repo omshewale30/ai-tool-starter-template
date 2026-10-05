@@ -17,7 +17,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/admin/example": {
+    "/api/v1/admin/audit-events": {
         parameters: {
             query?: never;
             header?: never;
@@ -25,10 +25,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Admin Example
-         * @description Trivial admin-only endpoint proving the authorization check works.
+         * List Audit Events
+         * @description Most recent audit events first.
          */
-        get: operations["admin_example_api_v1_admin_example_get"];
+        get: operations["list_audit_events_api_v1_admin_audit_events_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -133,12 +133,23 @@ export interface components {
             /** Provider */
             provider: string;
         };
-        /** AdminExampleResponse */
-        AdminExampleResponse: {
-            /** Actor */
-            actor: string;
-            /** Message */
-            message: string;
+        /** AuditEventOut */
+        AuditEventOut: {
+            /** Action */
+            action: string;
+            /** Actoremail */
+            actorEmail: string;
+            /** Correlationid */
+            correlationId: string | null;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /** Detail */
+            detail: string;
+            /** Id */
+            id: number;
         };
         /** AuthHealth */
         AuthHealth: {
@@ -213,6 +224,11 @@ export interface components {
         ErrorResponse: {
             error: components["schemas"]["ErrorDetail"];
         };
+        /** HTTPValidationError */
+        HTTPValidationError: {
+            /** Detail */
+            detail?: components["schemas"]["ValidationError"][];
+        };
         /** HealthResponse */
         HealthResponse: {
             /**
@@ -240,6 +256,19 @@ export interface components {
             roles: string[];
             /** Subject */
             subject: string;
+        };
+        /** ValidationError */
+        ValidationError: {
+            /** Context */
+            ctx?: Record<string, never>;
+            /** Input */
+            input?: unknown;
+            /** Location */
+            loc: (string | number)[];
+            /** Message */
+            msg: string;
+            /** Error Type */
+            type: string;
         };
     };
     responses: never;
@@ -270,9 +299,13 @@ export interface operations {
             };
         };
     };
-    admin_example_api_v1_admin_example_get: {
+    list_audit_events_api_v1_admin_audit_events_get: {
         parameters: {
-            query?: never;
+            query?: {
+                limit?: number;
+                /** @description Action prefix, e.g. `chat`. */
+                action?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -285,7 +318,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AdminExampleResponse"];
+                    "application/json": components["schemas"]["AuditEventOut"][];
                 };
             };
             /** @description Missing or invalid bearer token. */
@@ -304,6 +337,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
             /** @description Unexpected server error. */
