@@ -115,3 +115,28 @@ def test_stream_requires_a_valid_request(client):
 
 def test_provider_dependency_is_overridable_for_any_provider(client):
     assert issubclass(MockAIProvider, AIProvider)
+
+
+def test_an_over_long_history_turn_is_shortened_not_rejected(client):
+    captured = {}
+
+    class Recording(MockAIProvider):
+        async def chat(self, messages, **kwargs):
+            captured["assistant"] = messages[2].content
+            return await super().chat(messages, **kwargs)
+
+    client.app.dependency_overrides[_provider_dependency] = lambda: Recording()
+    long_answer = "x" * 50_000
+    resp = client.post(
+        "/api/v1/chat",
+        json={
+            "message": "follow-up",
+            "history": [
+                {"role": "user", "content": "write a lot"},
+                {"role": "assistant", "content": long_answer},
+            ],
+        },
+    )
+    assert resp.status_code == 200
+    assert len(captured["assistant"]) < 17_000
+    assert captured["assistant"].endswith("[…]")

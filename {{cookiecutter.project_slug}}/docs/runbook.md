@@ -8,7 +8,9 @@ workflow. Only a `dev` environment is wired up ([adding prod](#adding-a-producti
 
 - Azure CLI (`az login`), `jq`, and the GitHub CLI (`gh auth login`).
 - A resource group, and **Owner** (or Contributor + User Access Administrator) on it:
-  the scripts create role assignments.
+  the scripts create role assignments. Owner grants no access to Key Vault *contents*
+  (RBAC vault); `deploy-key-vault.sh` grants you **Key Vault Secrets Officer** so you
+  can seed `database-url` (it can take a few minutes to apply; the scripts wait).
 - The GitHub repository for this project, ideally in the `FO-AI` organization.
 
 ```bash
@@ -78,7 +80,7 @@ cd infra/scripts
 ./deploy-registry.sh -g "$RG"            # ACR (AcrPull for apps, AcrPush for CI/CD)
 ./deploy-storage.sh -g "$RG"             # Blob storage
 PG_ADMIN_PASSWORD=<16+ letters/digits> ./deploy-postgres.sh -g "$RG"
-./deploy-key-vault.sh -g "$RG"           # seeds the App Insights connection string
+./deploy-key-vault.sh -g "$RG"           # seeds App Insights string; grants you secret access
 {%- if cookiecutter.enable_ai_search == "yes" %}
 ./deploy-search.sh -g "$RG"              # optional now; see docs/rag.md
 {%- endif %}
@@ -168,6 +170,7 @@ AppDependencies
 | `publish`: "Set AZURE_TENANT_ID as a repository or organization variable" | Repository variables missing (environment ones aren't visible to `publish`) |
 | `azure/login`: no matching federated identity | Subject mismatch; see the immutable-claims note in step 2 |
 | CD: "would be removed: X" | A variable on the app isn't in the contract; add it, or run CD with allow-prune |
+| `deploy-api-app.sh`: "no data access to Key Vault" | Re-run `deploy-key-vault.sh` signed in as yourself (or pass `--operator-principal-id`), wait a minute, retry |
 | CD: "the app declares no secret database-url" | API app created without the Key Vault reference; `deploy-api-app.sh --recreate` |
 | CD: "must have internal ingress" | API app exposed publicly; recreate it with `deploy-api-app.sh --recreate` |
 | Site health: `auth.configured == true` failed | `AZURE_TENANT_ID` / `ENTRA_BACKEND_*` not set in `dev` |

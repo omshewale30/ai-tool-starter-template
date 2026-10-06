@@ -22,6 +22,9 @@ Options:
       --pipeline-principal-id <id>        CD pipeline identity object id; granted Key Vault Secrets
                                            Officer so scripts/cd.sh can write database-url
                                            (or DEPLOY_PRINCIPAL_ID env var)
+      --operator-principal-id <id>         Who runs these scripts; granted Key Vault Secrets
+                                           Officer to seed secrets (default: the signed-in user)
+      --operator-principal-type <type>     User (default), ServicePrincipal, or Group
   -s, --state-file <path>                  Local state file path (default: infra/state/<rg>.json)
       --deployment-name <name>             Override ARM deployment name
   -h, --help                               Show this help text
@@ -35,6 +38,8 @@ RESOURCE_PREFIX="{{ cookiecutter.resource_prefix }}"
 APP_PRINCIPAL_ID=""
 APPINSIGHTS_CONNECTION_STRING=""
 PIPELINE_PRINCIPAL_ID="${DEPLOY_PRINCIPAL_ID:-}"
+OPERATOR_PRINCIPAL_ID=""
+OPERATOR_PRINCIPAL_TYPE="User"
 STATE_FILE=""
 DEPLOYMENT_NAME=""
 
@@ -66,6 +71,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --pipeline-principal-id)
       PIPELINE_PRINCIPAL_ID="$2"
+      shift 2
+      ;;
+    --operator-principal-id)
+      OPERATOR_PRINCIPAL_ID="$2"
+      shift 2
+      ;;
+    --operator-principal-type)
+      OPERATOR_PRINCIPAL_TYPE="$2"
       shift 2
       ;;
     -s|--state-file)
@@ -106,6 +119,11 @@ APP_PRINCIPAL_ID="$(resolve_required_value "$APP_PRINCIPAL_ID" "$STATE_FILE" '.s
 APPINSIGHTS_CONNECTION_STRING="$(resolve_optional_value "$APPINSIGHTS_CONNECTION_STRING" "$STATE_FILE" '.services.observability.appInsightsConnectionString')"
 LOCATION="$(resolve_location "$RESOURCE_GROUP" "$LOCATION")"
 DEPLOYMENT_NAME="${DEPLOYMENT_NAME:-$(new_deployment_name key-vault "$ENVIRONMENT_NAME")}"
+if [[ -z "$OPERATOR_PRINCIPAL_ID" && "$OPERATOR_PRINCIPAL_TYPE" == "User" ]]; then
+  # Signed in as a user: grant yourself secret access. (A service principal sign-in
+  # has no signed-in user; pass --operator-principal-id/--operator-principal-type.)
+  OPERATOR_PRINCIPAL_ID="$(az ad signed-in-user show --query id -o tsv 2>/dev/null || true)"
+fi
 
 deployment_json="$(az deployment group create \
   --name "$DEPLOYMENT_NAME" \
@@ -118,6 +136,8 @@ deployment_json="$(az deployment group create \
     appPrincipalId="$APP_PRINCIPAL_ID" \
     appInsightsConnectionString="$APPINSIGHTS_CONNECTION_STRING" \
     pipelinePrincipalId="$PIPELINE_PRINCIPAL_ID" \
+    operatorPrincipalId="$OPERATOR_PRINCIPAL_ID" \
+    operatorPrincipalType="$OPERATOR_PRINCIPAL_TYPE" \
   -o json)"
 
 save_service_outputs "$STATE_FILE" "keyVault" "$RESOURCE_GROUP" "$ENVIRONMENT_NAME" "$RESOURCE_PREFIX" "$deployment_json"

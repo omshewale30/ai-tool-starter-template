@@ -133,3 +133,34 @@ refuse_if_app_exists() {
     exit 1
   fi
 }
+
+# Prints `present` or `missing` for a Key Vault secret (never its value). Owner and
+# Contributor grant no data access to an RBAC vault, and a fresh role assignment takes
+# minutes to apply, so "forbidden" is retried for a while and then reported as what
+# it is, never mistaken for "missing".
+kv_secret_state() {
+  local vault="$1" name="$2" output attempt
+  for attempt in $(seq 1 12); do
+    if output="$(az keyvault secret show --vault-name "$vault" --name "$name" --query id -o tsv 2>&1)"; then
+      echo present
+      return
+    fi
+    case "$output" in
+      *SecretNotFound*|*"was not found"*)
+        echo missing
+        return
+        ;;
+      *Forbidden*|*"not authorized"*|*"does not have secrets get permission"*)
+        echo "waiting for Key Vault access to apply ($attempt/12)..." >&2
+        sleep 10
+        ;;
+      *)
+        echo "error: could not read Key Vault secret $name: $output" >&2
+        exit 1
+        ;;
+    esac
+  done
+  echo "error: you have no data access to Key Vault $vault. Re-run deploy-key-vault.sh" >&2
+  echo "       (it grants the signed-in user Key Vault Secrets Officer) and try again." >&2
+  exit 1
+}

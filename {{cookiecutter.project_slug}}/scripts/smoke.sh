@@ -56,6 +56,19 @@ expect_json() {
   done
 }
 
+echo "::group::Check the API image's packaged files"
+# Prompts ship as package data; a missing file would only fail on the first chat.
+docker run --rm "$API_IMAGE" python -c '
+from importlib import resources
+from app.prompts import load_prompt
+names = [f.name[:-3] for f in resources.files("app.prompts").iterdir() if f.name.endswith(".md")]
+assert names, "no prompt files packaged"
+for name in names:
+    load_prompt(name)
+print("prompts packaged:", ", ".join(sorted(names)))
+'
+echo "::endgroup::"
+
 echo "::group::Start database, API, and web"
 docker network create "$RUN_ID" > /dev/null
 docker run --detach --name "${RUN_ID}-db" --network "$RUN_ID" --network-alias db \

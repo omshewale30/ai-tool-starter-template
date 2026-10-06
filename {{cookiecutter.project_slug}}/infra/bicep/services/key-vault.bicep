@@ -19,6 +19,12 @@ param appInsightsConnectionString string = ''
 @description('Object id of the CD pipeline identity (granted Key Vault Secrets Officer). Empty to skip.')
 param pipelinePrincipalId string = ''
 
+@description('Object id of the operator running the infra scripts (granted Key Vault Secrets Officer).')
+param operatorPrincipalId string = ''
+
+@allowed(['User', 'ServicePrincipal', 'Group'])
+param operatorPrincipalType string = 'User'
+
 @description('Optional additional seed secrets (name -> value).')
 @secure()
 param additionalSeedSecrets object = {}
@@ -52,6 +58,8 @@ module keyVault '../modules/key-vault.bicep' = {
     tags: tags
     appPrincipalId: appPrincipalId
     pipelinePrincipalId: pipelinePrincipalId
+    operatorPrincipalId: operatorPrincipalId
+    operatorPrincipalType: operatorPrincipalType
     seedSecrets: seedSecrets
   }
 }

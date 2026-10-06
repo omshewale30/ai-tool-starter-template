@@ -342,6 +342,14 @@ class DeployTests(unittest.TestCase):
                    if c["args"][:3] == ["acr", "repository", "show"]]
         self.assertEqual(lookups, [f"custom-api:{SHA}", f"custom-web:{SHA}"])
 
+    def test_image_prefix_from_a_mixed_case_repository_is_lowercased(self):
+        """ACR rejects uppercase repository names; publish.sh lowercases the same way."""
+        result, commands = self.deploy(GITHUB_REPOSITORY="FO-AI/Test-Repo")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        lookups = [c["args"][c["args"].index("--image") + 1] for c in commands
+                   if c["args"][:3] == ["acr", "repository", "show"]]
+        self.assertEqual(lookups, [f"test-repo-api:{SHA}", f"test-repo-web:{SHA}"])
+
     def test_order_is_validate_then_secrets_then_api_then_web_then_end_to_end(self):
         result, commands = self.deploy()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

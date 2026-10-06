@@ -17,6 +17,8 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 IMAGE_PREFIX="${IMAGE_PREFIX:-${GITHUB_REPOSITORY##*/}}"
+# ACR repository names must be lowercase; repository names may not be.
+IMAGE_PREFIX="$(tr '[:upper:]' '[:lower:]' <<< "$IMAGE_PREFIX")"
 for name in ACR_NAME IMAGE_TAG IMAGE_PREFIX; do
   if [[ -z "${!name:-}" ]]; then
     printf '::error::Missing publish setting: %s (set it as a repository variable)\n' "$name"

@@ -4,6 +4,7 @@
 #   bash scripts/verify-template.sh                 # both variants
 #   bash scripts/verify-template.sh --variant no    # AI Search disabled only
 #   bash scripts/verify-template.sh --docker        # also build images + smoke test
+#   bash scripts/verify-template.sh --e2e           # also run Playwright (installs Chromium)
 #   bash scripts/verify-template.sh --keep          # keep generated projects
 #
 # For each variant this renders the template, commits the result to a fresh git
@@ -18,12 +19,14 @@ TEMPLATE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PYTHON="${PYTHON:-python3.11}"
 VARIANTS=(no yes)
 RUN_DOCKER=0
+RUN_E2E=0
 KEEP=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --variant) VARIANTS=("$2"); shift 2 ;;
     --docker) RUN_DOCKER=1; shift ;;
+    --e2e) RUN_E2E=1; shift ;;
     --keep) KEEP=1; shift ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
@@ -112,10 +115,16 @@ verify_variant() {
     bash scripts/ci.sh frontend
 
     log "[$slug] bicep build"
+    if [[ -n "${CI:-}" ]] && command -v az >/dev/null 2>&1 && ! az bicep version >/dev/null 2>&1; then
+      az bicep install
+    fi
     if command -v az >/dev/null 2>&1 && az bicep version >/dev/null 2>&1; then
       while IFS= read -r -d '' file; do
         az bicep build --only-show-errors --file "$file" --stdout >/dev/null
       done < <(find infra/bicep -name '*.bicep' -print0)
+    elif [[ -n "${CI:-}" ]]; then
+      echo "error: az bicep is required in CI" >&2
+      return 1
     else
       echo "skipped: az bicep is not available"
     fi
@@ -134,6 +143,12 @@ verify_variant() {
       docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:latest .github/workflows/*.yml
     else
       echo "skipped: neither actionlint nor a running docker is available"
+    fi
+
+    if [[ "$RUN_E2E" == "1" ]]; then
+      log "[$slug] Playwright e2e"
+      (cd web && npx playwright install --with-deps chromium >/dev/null)
+      PYTHON="$PWD/.venv/bin/python" npm --prefix web run test:e2e
     fi
 
     if [[ "$RUN_DOCKER" == "1" ]]; then

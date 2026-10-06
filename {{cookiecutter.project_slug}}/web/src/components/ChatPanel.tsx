@@ -22,6 +22,8 @@ interface Turn extends ChatTurn {
 
 /** How many earlier turns are sent for context (the API accepts up to 20). */
 const HISTORY_LIMIT = 10;
+/** Characters of each earlier turn sent back (the API shortens longer ones anyway). */
+const HISTORY_TURN_CHARS = 8000;
 
 interface ChatPanelProps {
   /** Streaming endpoint (see app/services/ai/streaming.py for the protocol). */
@@ -65,7 +67,7 @@ export function ChatPanel({
     const history = turns
       .filter((turn) => turn.status === "done")
       .slice(-HISTORY_LIMIT)
-      .map(({ role, content }) => ({ role, content }));
+      .map(({ role, content }) => ({ role, content: content.slice(0, HISTORY_TURN_CHARS) }));
 
     setError(null);
     setAnnouncement("");

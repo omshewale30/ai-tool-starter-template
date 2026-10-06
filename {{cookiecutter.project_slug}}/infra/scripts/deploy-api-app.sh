@@ -101,7 +101,9 @@ DEPLOYMENT_NAME="${DEPLOYMENT_NAME:-$(new_deployment_name api-app "$ENVIRONMENT_
 
 # A Key Vault reference to a missing secret fails app creation, so seed database-url
 # once. Through a private file, never argv.
-if ! az keyvault secret show --vault-name "$KEY_VAULT_NAME" --name database-url --output none 2>/dev/null; then
+# Assigned first: `set -e` ignores a failing substitution inside [[ ]].
+database_url_state="$(kv_secret_state "$KEY_VAULT_NAME" database-url)"
+if [[ "$database_url_state" == missing ]]; then
   if [[ -z "${DATABASE_URL:-}" ]]; then
     echo "error: Key Vault secret database-url does not exist. Set DATABASE_URL (see" >&2
     echo "       deploy-postgres.sh output) and re-run; CD keeps it in sync afterwards." >&2
@@ -115,9 +117,13 @@ if ! az keyvault secret show --vault-name "$KEY_VAULT_NAME" --name database-url 
   echo "seeded Key Vault secret database-url"
 fi
 
-ENABLE_APP_INSIGHTS="false"
-if az keyvault secret show --vault-name "$KEY_VAULT_NAME" --name appinsights-connection-string --output none 2>/dev/null; then
+appinsights_state="$(kv_secret_state "$KEY_VAULT_NAME" appinsights-connection-string)"
+if [[ "$appinsights_state" == present ]]; then
   ENABLE_APP_INSIGHTS="true"
+else
+  ENABLE_APP_INSIGHTS="false"
+  echo "warning: Key Vault has no appinsights-connection-string (run deploy-observability.sh" >&2
+  echo "         then deploy-key-vault.sh); the API is created without Application Insights." >&2
 fi
 
 image_args=()

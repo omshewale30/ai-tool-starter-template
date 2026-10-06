@@ -14,6 +14,12 @@ param appPrincipalId string
 @description('Object id of the CD pipeline identity that writes secrets. Empty to skip.')
 param pipelinePrincipalId string = ''
 
+@description('Object id of the person running the infra scripts (they seed and read secrets). Empty to skip.')
+param operatorPrincipalId string = ''
+
+@allowed(['User', 'ServicePrincipal', 'Group'])
+param operatorPrincipalType string = 'User'
+
 @description('Optional seed secrets to create (name -> value). Only for values infra owns.')
 @secure()
 param seedSecrets object = {}
@@ -57,6 +63,18 @@ resource secretsOfficer 'Microsoft.Authorization/roleAssignments@2022-04-01' = i
   properties: {
     principalId: pipelinePrincipalId
     principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', secretsOfficerRoleId)
+  }
+}
+
+// Owner/Contributor on the resource group grant no Key Vault data access, so the
+// operator who seeds database-url (deploy-api-app.sh) needs this explicitly.
+resource operatorSecretsOfficer 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(operatorPrincipalId)) {
+  name: guid(keyVault.id, operatorPrincipalId, secretsOfficerRoleId)
+  scope: keyVault
+  properties: {
+    principalId: operatorPrincipalId
+    principalType: operatorPrincipalType
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', secretsOfficerRoleId)
   }
 }

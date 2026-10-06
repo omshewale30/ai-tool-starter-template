@@ -65,6 +65,8 @@ for name in RESOURCE_GROUP ACR_NAME KEY_VAULT_NAME API_APP_NAME WEB_APP_NAME AZU
   fi
 done
 IMAGE_PREFIX="${IMAGE_PREFIX:-${GITHUB_REPOSITORY##*/}}"
+# ACR repository names must be lowercase (publish.sh lowercases the same way).
+IMAGE_PREFIX="$(tr '[:upper:]' '[:lower:]' <<< "$IMAGE_PREFIX")"
 WEB_URL="${WEB_URL:-$AZURE_WEB_URL}"
 WEB_URL="${WEB_URL%/}"
 AZURE_WEB_URL="${AZURE_WEB_URL%/}"

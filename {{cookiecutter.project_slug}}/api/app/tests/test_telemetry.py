@@ -1,3 +1,8 @@
+import os
+import subprocess
+import sys
+from pathlib import Path
+
 import fastapi
 
 from app.core.config import Settings
@@ -26,3 +31,35 @@ def test_ai_spans_are_safe_without_telemetry():
     span.finish(model="mock-1", usage=Usage(prompt_tokens=3, completion_tokens=2))
     AISpan("chat", provider="mock").fail(RuntimeError("boom"))
     assert span.elapsed >= 0
+
+
+def test_a_configured_connection_string_instruments_the_real_app():
+    """End to end through configure_azure_monitor, in a fresh interpreter (instrumentation
+    is process-global). The ingestion endpoint is unroutable; nothing is sent."""
+    script = (
+        "import os, sys\n"
+        "from app.main import app\n"
+        "sys.stdout.write(type(app).__name__)\n"
+        "sys.stdout.flush()\n"
+        "os._exit(0)\n"  # skip exporter shutdown flushes
+    )
+    env = {
+        **os.environ,
+        "ENVIRONMENT": "test",
+        "AUTH_MODE": "disabled",
+        "DATABASE_URL": "sqlite+pysqlite:///:memory:",
+        "APPLICATIONINSIGHTS_CONNECTION_STRING": (
+            "InstrumentationKey=00000000-0000-0000-0000-000000000000;"
+            "IngestionEndpoint=https://127.0.0.1/"
+        ),
+    }
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=Path(__file__).resolve().parents[2],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    assert result.stdout == "_InstrumentedFastAPI", result.stderr[-2000:]

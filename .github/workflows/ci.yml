@@ -22,7 +22,7 @@ jobs:
       checks: >-
         [{"name":"template (search=no)","directory":".","python-version":"3.11","node-version":"22",
           "install":"python -m pip install cookiecutter",
-          "run":"PYTHON=python bash scripts/verify-template.sh --variant no --docker"},
+          "run":"PYTHON=python bash scripts/verify-template.sh --variant no --docker --e2e"},
          {"name":"template (search=yes)","directory":".","python-version":"3.11","node-version":"22",
           "install":"python -m pip install cookiecutter",
           "run":"PYTHON=python bash scripts/verify-template.sh --variant yes"}]
