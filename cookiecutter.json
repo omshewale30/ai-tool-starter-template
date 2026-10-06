@@ -2,7 +2,7 @@
   "project_name": "Internal AI Tool",
   "project_slug": "{{ cookiecutter.project_name.lower().replace(' ', '-').replace('_', '-') }}",
   "python_package_name": "{{ cookiecutter.project_slug.replace('-', '_') }}",
-  "project_description": "An internal AI-native web application.",
+  "project_description": "An AI tool for UNC-Chapel Hill Finance and Operations.",
   "azure_location": "eastus",
   "resource_prefix": "aitool",
   "entra_tenant_id": "00000000-0000-0000-0000-000000000000",
@@ -13,6 +13,19 @@
     "no",
     "yes"
   ],
+  "__prompts__": {
+    "project_name": "Tool name (shown in the UI)",
+    "project_slug": "Repository / folder name (lowercase, hyphens; also the image name prefix)",
+    "python_package_name": "Python package name",
+    "project_description": "One-line description",
+    "azure_location": "Azure region",
+    "resource_prefix": "Azure resource name prefix (2-12 lowercase letters/digits)",
+    "entra_tenant_id": "Entra (UNC) tenant id (placeholder is fine; set later)",
+    "frontend_client_id": "Web app registration client id (placeholder is fine)",
+    "backend_client_id": "API app registration client id (placeholder is fine)",
+    "backend_app_id_uri": "API application ID URI",
+    "enable_ai_search": "Include 'ask the documents' RAG (Azure AI Search)?"
+  },
   "_copy_without_render": [
     ".github/workflows/*.yml",
     "scripts/*.sh",

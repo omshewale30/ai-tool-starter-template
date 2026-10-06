@@ -6,7 +6,7 @@
 ## Context
 
 The frontend runs in the user's browser, where any secret, endpoint, or token it
-holds is fully exposed. Azure AI Foundry access is privileged: it carries cost,
+holds is fully exposed. Access to UNC's Azure OpenAI / AI Foundry models is privileged: it carries cost,
 quota, data-governance, and prompt-safety concerns. It is tempting to call the AI
 service directly from the SPA to save a hop.
 
@@ -27,6 +27,7 @@ user-scoped Entra token.
 - **Swappable providers.** Mock vs. Foundry is a backend config switch
   (`AI_PROVIDER`); the frontend is unaffected. Local dev and tests need no Azure.
 - **Cost/latency.** One extra network hop, accepted for the security and control
-  benefits. Streaming responses can be added at the backend edge if needed.
+  benefits. Responses stream to the browser as server-sent events, so the hop does
+  not delay the first token.
 - The same rule applies to Storage, Search, and the database: privileged access
   is backend-only.

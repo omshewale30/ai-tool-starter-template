@@ -1,164 +1,189 @@
 # Runbook
 
-Operational procedures for {{ cookiecutter.project_name }}.
+First-time setup of an Azure environment, then day-to-day operations. Resources are
+created once by hand with `infra/scripts/deploy-*.sh`; every later release is the CD
+workflow. Only a `dev` environment is wired up ([adding prod](#adding-a-production-environment)).
 
-## Deploy
+## 0. Prerequisites
 
-### Prerequisites (one-time)
-
-1. Create the two Entra app registrations (frontend SPA, backend API) — see
-   [security.md](security.md) and the auth troubleshooting section below.
-2. Create an Entra app registration for the deploy pipeline and configure a
-   **federated credential** for GitHub OIDC (subject
-   `repo:<org>/<repo>:environment:dev`). Grant it `Contributor` (+ `User Access
-   Administrator` for role assignments) on the target subscription.
-3. Configure GitHub repository **secrets** and **variables**:
-
-   | Kind | Name | Example |
-   | --- | --- | --- |
-   | secret | `AZURE_CLIENT_ID` | pipeline app client id |
-   | secret | `AZURE_TENANT_ID` | tenant id |
-   | secret | `AZURE_SUBSCRIPTION_ID` | subscription id |
-   | secret | `SQL_ADMIN_PASSWORD` | strong password |
-   | var | `AZURE_LOCATION` | `{{ cookiecutter.azure_location }}` |
-   | var | `ADMIN_GROUP_ID` | admin group object id |
-   | var | `ENTRA_FRONTEND_CLIENT_ID` | SPA client id |
-   | var | `ENTRA_BACKEND_APP_ID_URI` | `{{ cookiecutter.backend_app_id_uri }}` |
-   | var | `AZURE_AI_FOUNDRY_ENDPOINT` | Foundry endpoint |
-
-### Automated deploy
-
-Push to `main` or run the **Deploy (dev)** workflow manually. It:
-
-1. Logs in to Azure via OIDC.
-2. Provisions infrastructure with Bicep.
-3. Builds and pushes the API and web images to ACR.
-4. Rolls out the new images with `az containerapp update`.
-
-> Note: the current workflow still uses `infra/bicep/main.bicep` (legacy
-> monolithic path). The recommended operator workflow is the new per-service
-> scripts below.
-
-### Manual deploy (per service into an existing RG)
-
-Create the resource group manually first, then deploy one service per run.
-Scripts never create resource groups.
-
-Each script:
-
-- uses `az deployment group create`
-- deploys exactly one service entrypoint in `infra/bicep/services`
-- writes outputs to `infra/state/<resource-group>.json` for explicit dependency chaining
-
-#### Deployment order (recommended)
-
-1. `identity`: foundation for RBAC assignments used by other services.
-2. `observability`: Log Analytics/App Insights needed by Key Vault seed + CA env.
-3. `registry`: needs identity principal id.
-4. `storage`: needs identity principal id.
-5. `postgres` (currently backed by the Azure SQL module): needs Entra admin object id (typically identity principal id).
-6. `key-vault`: needs identity principal id; optionally seeds SQL/App Insights secrets.
-7. `container-apps-env`: needs Log Analytics workspace name.
-8. `search` (optional): needs identity principal id.
-9. `api-app`: needs env, identity, registry, storage, database, and key vault outputs.
-10. `web-app`: needs env, identity, and registry outputs.
-
-#### Exact commands for `rg-nimbus`
+- Azure CLI (`az login`), `jq`, and the GitHub CLI (`gh auth login`).
+- A resource group, and **Owner** (or Contributor + User Access Administrator) on it:
+  the scripts create role assignments.
+- The GitHub repository for this project, ideally in the `FO-AI` organization.
 
 ```bash
-az login
-az account set --subscription <sub-id>
-export SQL_ADMIN_PASSWORD='...'
-export API_IMAGE='REPLACE_ME.azurecr.io/{{ cookiecutter.project_slug }}-api:<tag>'
-export WEB_IMAGE='REPLACE_ME.azurecr.io/{{ cookiecutter.project_slug }}-web:<tag>'
-export AZURE_AI_FOUNDRY_ENDPOINT='https://<foundry-resource>.openai.azure.com/'
+export RG=rg-{{ cookiecutter.resource_prefix }}-dev
+az group create -n "$RG" -l {{ cookiecutter.azure_location }}   # if it doesn't exist
+```
 
+Every script takes `-g <resource-group>` and remembers its outputs in
+`infra/state/<resource-group>.json` (git-ignored), so later scripts find earlier
+resources without arguments. `-h` prints each script's options.
+
+## 1. App registrations
+
+Created by hand in Entra ID (or requested from UNC ITS). Two registrations:
+
+**API** (`{{ cookiecutter.project_name }} API`)
+- *Expose an API*: Application ID URI `api://<api client id>`; scope
+  `access_as_user` (admins and users can consent).
+- *Manifest*: `"requestedAccessTokenVersion": 2`. Without it Entra issues v1 tokens
+  whose issuer the API rejects, and every call returns 401.
+- *App roles*: `admin` (value `admin`, allowed member type Users/Groups). Assign it
+  to admins under *Enterprise applications → Users and groups*. App roles are
+  preferred over group claims: users in more than 200 groups get no `groups` claim
+  (overage), so group checks fail silently. `ADMIN_GROUP_ID` remains as a fallback.
+
+**Web** (`{{ cookiecutter.project_name }}`)
+- *Authentication*: platform **Single-page application** with redirect URIs
+  `https://<web url>/auth` and `http://localhost:3000/auth`. No secret.
+- *API permissions*: the API's `access_as_user` (delegated); grant admin consent,
+  or pre-authorize the web client id on the API registration.
+
+You need: tenant id, API client id, web client id.
+
+## 2. CI/CD identity (GitHub OIDC)
+
+One app registration (or user-assigned identity) that GitHub Actions signs in as. No
+secrets: two **federated credentials** for this repository:
+
+| Used by | Subject |
+| --- | --- |
+| CI `publish` job (no environment) | `repo:<org>/<repo>:ref:refs/heads/main` |
+| CD `deploy` job (`dev` environment) | `repo:<org>/<repo>:environment:dev` |
+
+If the repository uses **immutable subject claims** (FO-AI repos do), the subjects
+take the form `repo:<org>@<org-id>/<repo>@<repo-id>:ref:refs/heads/main` (and
+`...:environment:dev`); with the plain form the first sign-in fails with a confusing
+"no matching federated identity" error. Copy the exact subject from that error if
+unsure.
+
+Roles: **Contributor** on the resource group (container app updates). AcrPush and
+Key Vault Secrets Officer are granted by the scripts below when you pass its
+**object id** as `DEPLOY_PRINCIPAL_ID`.
+
+```bash
+export DEPLOY_PRINCIPAL_ID=<object id of the CI/CD service principal>
+az role assignment create --assignee-object-id "$DEPLOY_PRINCIPAL_ID" \
+  --assignee-principal-type ServicePrincipal --role Contributor \
+  --scope "$(az group show -n "$RG" --query id -o tsv)"
+```
+
+## 3. Azure resources (once, in order)
+
+```bash
 cd infra/scripts
-
-./deploy-identity.sh -g rg-nimbus -e dev -l {{ cookiecutter.azure_location }}
-./deploy-observability.sh -g rg-nimbus -e dev -l {{ cookiecutter.azure_location }}
-./deploy-registry.sh -g rg-nimbus -e dev -l {{ cookiecutter.azure_location }}
-./deploy-storage.sh -g rg-nimbus -e dev -l {{ cookiecutter.azure_location }}
-./deploy-postgres.sh -g rg-nimbus -e dev -l {{ cookiecutter.azure_location }} --sql-admin-password "$SQL_ADMIN_PASSWORD"
-./deploy-key-vault.sh -g rg-nimbus -e dev -l {{ cookiecutter.azure_location }} --sql-admin-password "$SQL_ADMIN_PASSWORD"
-./deploy-container-apps-env.sh -g rg-nimbus -e dev -l {{ cookiecutter.azure_location }}
-
-# Optional search service:
-./deploy-search.sh -g rg-nimbus -e dev -l {{ cookiecutter.azure_location }}
-
-./deploy-api-app.sh -g rg-nimbus -e dev -l {{ cookiecutter.azure_location }} \
-  --image "$API_IMAGE" \
-  --foundry-endpoint "$AZURE_AI_FOUNDRY_ENDPOINT"
-./deploy-web-app.sh -g rg-nimbus -e dev -l {{ cookiecutter.azure_location }} \
-  --image "$WEB_IMAGE"
+./deploy-identity.sh -g "$RG"            # user-assigned identity for both apps
+./deploy-observability.sh -g "$RG"       # Log Analytics + Application Insights
+./deploy-registry.sh -g "$RG"            # ACR (AcrPull for apps, AcrPush for CI/CD)
+./deploy-storage.sh -g "$RG"             # Blob storage
+PG_ADMIN_PASSWORD=<16+ letters/digits> ./deploy-postgres.sh -g "$RG"
+./deploy-key-vault.sh -g "$RG"           # seeds the App Insights connection string
+{%- if cookiecutter.enable_ai_search == "yes" %}
+./deploy-search.sh -g "$RG"              # optional now; see docs/rag.md
+{%- endif %}
+./deploy-container-apps-env.sh -g "$RG"
+DATABASE_URL='postgresql+psycopg://<login>:<password>@<server>.postgres.database.azure.com:5432/appdb?sslmode=require' \
+  ./deploy-api-app.sh -g "$RG"            # internal ingress; seeds Key Vault database-url
+./deploy-web-app.sh -g "$RG"              # public ingress; prints the web URL
 ```
 
-If needed, pass explicit dependency overrides to any script (`--help`) instead of
-state-file defaults.
+The apps start on a placeholder image. They get real images from the first CD run.
+Re-running `deploy-api-app.sh`/`deploy-web-app.sh` is refused once an app exists
+(CD owns image and env from then on); pass `--recreate` only if you mean it.
 
-Apply database migrations after the first deploy (from a machine that can reach
-Azure SQL, or a one-off job):
+Then:
+- add `<web url>/auth` to the web app registration's SPA redirect URIs;
+- request **Cognitive Services OpenAI User** on UNC's Azure OpenAI for the app
+  identity (`identity.principalId` in the state file); see [ai.md](ai.md).
+
+## 4. GitHub configuration
 
 ```bash
-alembic upgrade head
+./print-github-settings.sh -g "$RG" --pipeline-client-id <CI/CD app client id>
 ```
 
-## Rotate secrets
+prints every `gh variable set` / `gh secret set` command, filled in from the state
+file. Fill the `<placeholders>` and run them. Summary:
 
-- **SQL admin password**: update the GitHub secret `SQL_ADMIN_PASSWORD`, then
-  re-run the deploy (Bicep updates the server and the Key Vault seed secret). Or
-  rotate directly with `az sql server update` and update Key Vault.
-- **Key Vault secrets**: `az keyvault secret set --vault-name <kv> --name <n>
-  --value <v>`. Container Apps pick up new versions on the next revision; restart
-  with `az containerapp revision restart` if needed.
-- **Entra client secrets**: prefer managed identity / federated credentials so
-  there are no client secrets to rotate. If one exists, roll it in Entra and
-  update the corresponding Key Vault secret.
+| Where | Name | Notes |
+| --- | --- | --- |
+| Repository variables | `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` | The CI/CD identity; `publish` runs outside the environment and can only read these |
+| Repository variable | `ACR_NAME` | Registry name (not the login server) |
+| `dev` variables | `RESOURCE_GROUP`, `KEY_VAULT_NAME`, `API_APP_NAME`, `WEB_APP_NAME`, `AZURE_WEB_URL`, optional `WEB_URL` (custom domain) | Deploy targets |
+| `dev` variables | `AUTH_MODE`=`entra`, `AZURE_TENANT_ID`, `ENTRA_BACKEND_CLIENT_ID`, `ENTRA_BACKEND_APP_ID_URI`, `ENTRA_CLIENT_ID`, `ENTRA_TENANT_ID`, `ENTRA_API_SCOPE`, `AZURE_AI_FOUNDRY_*`, … | Application settings; the full list is `deploy/env-contract.json` |
+| `dev` secret | `DATABASE_URL` | Written to Key Vault `database-url` on every deploy |
 
-## Inspect logs
+`AZURE_CLIENT_ID` the repository variable is the CI/CD identity; the API's own
+`AZURE_CLIENT_ID` (its managed identity) is set by infra and never read from GitHub.
 
-```bash
-# Live tail from a container app
-az containerapp logs show -n <app-name> -g <rg> --follow
+Also:
+- **Environment `dev`**: *Deployment branches* → `main` only.
+- **Branch protection on `main`**: require the `verify` check (only that one; adding
+  checks then needs no rule change).
 
-# Structured queries in Log Analytics (App Insights)
-# Portal > Logs, or:
-az monitor log-analytics query -w <workspace-id> \
-  --analytics-query "ContainerAppConsoleLogs_CL | where Log_s has 'correlation_id' | take 50"
+## 5. First deploy
+
+Push to `main` (or re-run CI on it). CI passes → `publish` builds both images in ACR
+and smoke-tests them → CD (`.github/workflows/cd.yml`) runs `scripts/cd.sh`:
+
+1. validates every setting against `deploy/env-contract.json` (nothing changes yet);
+2. checks both apps (single revision, `minReplicas ≥ 1`, managed-identity pull,
+   internal API ingress) and derives `BACKEND_ORIGIN` from the API's internal FQDN;
+3. rechecks that the commit is still `main`, syncs `database-url` to Key Vault;
+4. rolls out the API, then the web, each gated on revision health;
+5. checks `<web>/api/health` end to end (database, auth, AI configured) and `/`;
+6. on any failure, rolls back web then API to the previous images and env.
+
+The job summary shows the deployed digests and the outcome.
+
+## Operations
+
+| Task | How |
+| --- | --- |
+| Redeploy current `main` | Actions → CD → *Run workflow* |
+| Roll back a bad release | Revert the commit on `main`; CD deploys the revert. (Failed deploys roll back automatically.) |
+| Remove a hand-set container env var | CD → *Run workflow* with **allow-prune** |
+| Change a setting | Update the GitHub variable/secret, then redeploy |
+| Rotate the DB password | Change it on the server, update the `DATABASE_URL` secret, redeploy |
+| API logs | `az containerapp logs show -g $RG -n <api app> --follow` |
+| Traces, failures, AI usage | Application Insights → *Transaction search*, *Failures*; spans named `ai.*` carry token usage |
+| Who did what | `/admin` in the app (audit events) |
+| Scale | `minReplicas`/`maxReplicas`, `cpu`, `memory` in `infra/bicep/services/*-app.bicep`, then `--recreate` and redeploy |
+
+Useful Log Analytics query (AI calls by model, last day):
+
+```kusto
+AppDependencies
+| where TimeGenerated > ago(1d) and Name startswith "ai."
+| summarize calls = count(), p95_ms = percentile(DurationMs, 95),
+    output_tokens = sum(toint(Properties["gen_ai.usage.output_tokens"]))
+    by Name, tostring(Properties["gen_ai.response.model"])
 ```
 
-Every log line and error response carries a `correlationId` — use it to trace a
-single request end to end.
+## Troubleshooting
 
-## Troubleshoot auth issues
-
-| Symptom | Likely cause / fix |
+| Symptom | Likely cause |
 | --- | --- |
-| `401 unauthorized` for all calls | Token audience/issuer mismatch. Confirm `ENTRA_BACKEND_APP_ID_URI` and `AZURE_TENANT_ID`, and that the SPA requests the correct scope. |
-| `401` intermittently | Clock skew or expired token; MSAL should refresh. Check `jwt_leeway_seconds`. |
-| `403 forbidden` on admin routes | User lacks the `admin` role or `ADMIN_GROUP_ID` membership. |
-| Works locally, fails deployed | You were running with `AUTH_MODE=disabled`. Test with `AUTH_MODE=entra` and a real token. |
-| Login loop / redirect error | `NEXT_PUBLIC_ENTRA_REDIRECT_URI` must be registered as a redirect URI on the SPA app registration. |
+| `publish`: "Set AZURE_TENANT_ID as a repository or organization variable" | Repository variables missing (environment ones aren't visible to `publish`) |
+| `azure/login`: no matching federated identity | Subject mismatch; see the immutable-claims note in step 2 |
+| CD: "would be removed: X" | A variable on the app isn't in the contract; add it, or run CD with allow-prune |
+| CD: "the app declares no secret database-url" | API app created without the Key Vault reference; `deploy-api-app.sh --recreate` |
+| CD: "must have internal ingress" | API app exposed publicly; recreate it with `deploy-api-app.sh --recreate` |
+| Site health: `auth.configured == true` failed | `AZURE_TENANT_ID` / `ENTRA_BACKEND_*` not set in `dev` |
+| Site health: `ai.configured == true` failed | `AZURE_AI_FOUNDRY_ENDPOINT` / `..._DEPLOYMENT_NAME` not set |
+| Every API call 401 after sign-in | API registration issues v1 tokens (`requestedAccessTokenVersion` must be 2) or audience mismatch |
+| AADSTS50011 redirect mismatch | `<origin>/auth` not registered as a **SPA** redirect URI |
+| AI calls 502, log says 401/403 | App identity lacks Cognitive Services OpenAI User on UNC's resource |
+| Revision unhealthy right after deploy | Migrations failed or DB unreachable: check API logs (`alembic upgrade head` runs at start) |
 
-Decode a token at <https://jwt.ms> to inspect `aud`, `iss`, `roles`, `groups`.
+## Adding a production environment
 
-## Troubleshoot Foundry calls
-
-| Symptom | Likely cause / fix |
-| --- | --- |
-| `502 upstream_error` from `/chat` | Foundry call failed. Check backend logs for the wrapped exception. |
-| `AZURE_AI_FOUNDRY_ENDPOINT is not configured` | Set the endpoint and switch `AI_PROVIDER=foundry`. |
-| `403` from Foundry | The managed identity lacks a role on the AI resource, or the wrong `AZURE_CLIENT_ID` is set. Grant `Cognitive Services User`. |
-| SDK / signature errors | Confirm the installed `openai`/`azure-ai-*` version matches `foundry_provider._invoke_model`; update that one adapter method. |
-| Deployment name errors | `AZURE_AI_FOUNDRY_DEPLOYMENT_NAME` must match a real model deployment. |
-
-To bisect, set `AI_PROVIDER=mock` — if `/chat` then works, the issue is isolated
-to the Foundry integration.
-
-## Onboard a new developer
-
-1. Install prerequisites (Docker, Node 20 LTS/22 LTS, Python 3.11+). See
-   [local-development.md](local-development.md).
-2. `cp .env.example .env` and `make dev`.
-3. Open http://localhost:3000 (auth disabled, mock AI — no Azure needed).
-4. Grant Azure access only when they need to deploy or use real Foundry.
+1. Create a separate resource group and repeat steps 3–4 with `-e prod` and a
+   `prod` GitHub environment (with required reviewers).
+2. Add a federated credential for `environment:prod`.
+3. Add a second job to `.github/workflows/cd.yml` that calls the same reusable
+   workflow with `environment: prod`, `needs: deploy`, so it promotes the digests
+   `dev` just verified. First parameterize `scripts/cd.sh`, which currently
+   hard-codes `dev` (the `ENVIRONMENT` it sets and the health check that expects it),
+   e.g. from a `DEPLOY_ENVIRONMENT` variable set per GitHub environment.

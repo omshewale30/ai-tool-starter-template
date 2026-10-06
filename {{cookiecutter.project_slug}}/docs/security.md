@@ -1,97 +1,116 @@
 # Security
 
-## Identity model (Microsoft Entra ID)
+## Exposure
 
-Two app registrations:
+Only the **web** container app has public ingress. It serves the UI and forwards
+`/api/*` to the **API**, whose ingress is internal to the Container Apps environment
+(`cd.sh` refuses to deploy if it isn't). The forwarder passes requests through
+unchanged, including the `Authorization` header; it makes no authorization
+decisions. There is no CORS: the browser only calls its own origin.
 
-- **Frontend (SPA)** — public client. Users sign in here via MSAL. It requests
-  delegated access to the backend API scope.
-- **Backend (Web/API)** — exposes an API scope (e.g. `access_as_user`) and,
-  optionally, **app roles** (e.g. `admin`). Access tokens issued for this API
-  carry the caller's identity and role/group claims.
+## Identity (Microsoft Entra ID)
 
-The frontend never sees any client secret. It uses the authorization-code flow
-with PKCE (handled by MSAL).
+Two app registrations ([runbook](runbook.md#1-app-registrations)):
 
-## Token validation
+- **Web (SPA)**: public client; users sign in with MSAL using the authorization code
+  flow with PKCE, redirect URI `<origin>/auth`. No client secret exists.
+- **API**: exposes the delegated scope `access_as_user` and the `admin` app role, and
+  issues **v2** access tokens.
 
-The backend validates every access token (`core/security.py`):
+Tokens are cached by MSAL v5 in encrypted `localStorage`; silent renewal uses the
+refresh token, never a hidden iframe.
 
-- **Signature** — verified against the tenant's published JWKS
-  (`https://login.microsoftonline.com/<tenant>/discovery/v2.0/keys`).
-- **Issuer** — must equal `https://login.microsoftonline.com/<tenant>/v2.0`.
-- **Audience** — must equal the backend app id URI or client id.
-- **Expiry** — enforced (with a small configurable leeway).
+## Token validation (`api/app/core/security.py`)
 
-Validation failures return `401` with the standard error envelope. Keys are
-cached in-process by `PyJWKClient`.
+Every API request (except health) validates the bearer token:
+
+- **signature** against the tenant JWKS (keys cached by `PyJWKClient`);
+- **issuer** `https://login.microsoftonline.com/<tenant>/v2.0`;
+- **audience** the API's app id URI or client id;
+- **expiry**, with a small leeway (`JWT_LEEWAY_SECONDS`).
+
+Failures return `401` with the standard error envelope.
 
 ## Authorization
 
-- `get_current_user` resolves the caller into a `Principal` (subject, name,
-  email, roles, groups).
-- `require_admin` gates admin routes: it allows the `admin` app role **or**
-  membership in the configured `ADMIN_GROUP_ID`.
-- Authorization is always enforced server-side. The UI only uses claims for
-  presentation (e.g. hiding links) — never as a security boundary.
+- `CurrentUser` resolves the caller to a `Principal` (object id, name, email, roles).
+- `AdminUser` requires the `admin` **app role** (or membership in `ADMIN_GROUP_ID`).
+  Prefer app roles: Entra omits the `groups` claim for users in more than 200 groups.
+- Authorization is enforced only in the API. The UI hides links for convenience.
 
-## The `AUTH_MODE=disabled` bypass
+## Local development bypass
 
-For local development only, `AUTH_MODE=disabled` skips token validation and
-injects a clearly-fake development principal (`is_dev_principal=True`). It is
-deliberately loud:
+`AUTH_MODE=disabled` (API) and `NEXT_PUBLIC_AUTH_DISABLED=true` (web build) replace
+sign-in with a clearly fake admin principal for local development and tests. Guards:
 
-- The backend logs a warning on startup and on every token resolution.
-- `/api/v1/me` returns `isDevPrincipal: true`.
-- The frontend shows a persistent "Auth is disabled" banner.
-- The backend refuses to start if `AUTH_MODE=disabled` and `ENVIRONMENT` is not
-  `local` or `test`.
+- the API refuses to start with `AUTH_MODE=disabled` unless `ENVIRONMENT` is `local`
+  or `test`, and logs a warning;
+- the web flag is **build-time**: published images are built without it, so no
+  environment variable can switch sign-in off in Azure;
+- the deploy contract requires `AUTH_MODE=entra`, and the deploy's health check
+  requires `auth.mode == "entra"` and `auth.configured`;
+- the UI shows a permanent warning banner.
 
-Never set `AUTH_MODE=disabled` in a deployed environment. Deployments default to
-`AUTH_MODE=entra` (see the Bicep parameters).
+## Secrets
 
-## Secrets management
-
-- **No secrets in source or images.** `.env`/`.env.local` are git-ignored;
+- Nothing secret is committed or baked into an image. `.env` files are git-ignored;
   only `*.example` files are committed.
-- In Azure, secrets live in **Key Vault** and are surfaced to Container Apps as
-  **Key Vault references** resolved by the app's **managed identity**.
-- The SQL admin password and image tags are passed to Bicep via environment
-  variables in CI (`readEnvironmentVariable`), not committed.
+- In Azure, secrets are **Key Vault references** resolved by the app's managed
+  identity. `database-url` is owned by CD (from the `DATABASE_URL` GitHub secret);
+  `appinsights-connection-string` is seeded by infra.
+- `scripts/cd.sh` never puts a secret on a command line or in a log: the secrets
+  object goes only to the renderer, values are written to `0600` files and passed with
+  `--file`, extracted values are masked, and every mutating `az` call uses `-o none`.
+  `scripts/tests/test_deploy.py` enforces this.
+- CI/CD authenticates with OIDC federated credentials; there are no Azure passwords
+  in GitHub.
 
-## Managed identity / keyless auth
+## Managed identity (keyless Azure access)
 
-A single **user-assigned managed identity** is granted least-privilege roles:
+One user-assigned identity is used by both apps:
 
 | Resource | Role |
 | --- | --- |
-| ACR | AcrPull |
+| Container Registry | AcrPull |
 | Key Vault | Key Vault Secrets User |
 | Storage | Storage Blob Data Contributor |
-| AI Search (optional) | Search Index Data Reader |
-| Azure SQL | Entra admin / DB user |
+| UNC Azure OpenAI | Cognitive Services OpenAI User (granted by UNC) |
+{%- if cookiecutter.enable_ai_search == "yes" %}
+| AI Search | Search Index Data Reader |
+{%- endif %}
 
-Backend Azure SDK calls use `DefaultAzureCredential`, which selects this identity
-in Azure (`AZURE_CLIENT_ID` is set) and falls back to `az login` locally.
+The API's Azure SDK calls use `DefaultAzureCredential` (`AZURE_CLIENT_ID` selects
+this identity). PostgreSQL uses a password held in Key Vault; switch to Entra
+authentication for the database if your data warrants it.
 
-## AI service access
+## AI
 
-Azure AI Foundry is called **only** from the backend service layer
-(`services/ai/foundry_provider.py`) using managed identity — never from the
-browser. This keeps model access, quotas, and prompt/response handling on a
-trusted tier. See [`adr/0002-backend-only-ai-access.md`](adr/0002-backend-only-ai-access.md).
+- Models are called only by the API ([ADR 0002](adr/0002-backend-only-ai-access.md)),
+  with the managed identity; no keys or endpoints reach the browser.
+- Model output is rendered with `react-markdown`, which never renders raw HTML.
+- The audit trail and telemetry record usage (model, tokens, latency), **not** prompts
+  or answers. Do not add prompt logging without a data-handling decision.
+- Prompts (`api/app/prompts/`) tell the model not to request or repeat sensitive
+  personal data; that is guidance, not a control. Don't send data the model isn't
+  approved for.
 
-## Logging cautions
+## Browser hardening
 
-- Logs are structured JSON with a correlation id. **Do not log** access tokens,
-  full prompts/responses that may contain sensitive data, secrets, or PII.
-- The audit trail records *that* an event happened (e.g. `chat.completed`) and by
-  whom — not message content.
-- Unhandled exceptions are logged server-side with detail but return a generic
-  message to clients (no internal leakage).
+`web/src/proxy.ts` sets, on every page: a nonce-based **Content-Security-Policy**
+(scripts only from this origin with the per-request nonce; network calls only to this
+origin and Entra; no framing), `X-Content-Type-Options`, `X-Frame-Options: DENY`,
+`Referrer-Policy`, `Permissions-Policy`, and HSTS. Request bodies forwarded to the API
+are capped (`web/src/lib/api/bounded-body.ts`).
 
-## Transport & CORS
+## Logging
 
-- All ingress is HTTPS (Container Apps; `allowInsecure: false`).
-- CORS on the backend is restricted to the configured frontend origin(s)
-  (`CORS_ALLOW_ORIGINS`).
+- Structured JSON with a correlation id; the id from a caller is accepted only if it
+  is short and plain, so it can't forge log lines.
+- Never log tokens, secrets, prompts/answers, or other personal data.
+- Unhandled errors are logged with detail but return a generic message and the
+  correlation id to the client.
+
+## Not included (add when a tool needs it)
+
+Rate limiting / per-user quotas, private networking (VNet, private endpoints), and
+Entra authentication for PostgreSQL. See [ai.md](ai.md) for where quotas would go.

@@ -2,240 +2,84 @@
 
 {{ cookiecutter.project_description }}
 
-An AI-native internal web app: **Next.js** frontend, **FastAPI** backend,
-**Microsoft Entra ID** auth, **Azure AI Foundry** for AI, deployed to **Azure
-Container Apps**. Generated from the `ai-tool-starter` template.
+A UNC-Chapel Hill Finance and Operations AI tool: a Next.js web app and a FastAPI
+API, with Microsoft Entra ID sign-in (Onyen), UNC's Azure-hosted OpenAI models,
+PostgreSQL, and Azure Container Apps, shipped through the standard
+[FO-AI/automation](https://github.com/FO-AI/automation) CI/CD pipeline.
 
----
-
-## Table of contents
-
-- [What this is](#what-this-is)
-- [Architecture overview](#architecture-overview)
-- [Tech stack](#tech-stack)
-- [Local setup](#local-setup)
-- [Environment variables](#environment-variables)
-- [Running the backend](#running-the-backend)
-- [Running the frontend](#running-the-frontend)
-- [Running tests](#running-tests)
-- [Auth setup overview](#auth-setup-overview)
-- [Azure setup overview](#azure-setup-overview)
-- [Deployment overview](#deployment-overview)
-- [Creating a new project from the template](#creating-a-new-project-from-the-template)
-- [What to change for a real project](#what-to-change-for-a-real-project)
-- [Security notes](#security-notes)
-- [Known limitations](#known-limitations)
-
-## What this is
-
-A lightweight, opinionated baseline for internal AI tools. It wires up the seams
-that every such app needs — auth, API calls, AI service access, config, logging,
-testing, and deployment — without becoming a heavy framework. Copy it, delete
-what you don't need, and extend.
-
-## Architecture overview
-
-```
-Browser ──(MSAL login)──> Microsoft Entra ID
-   │  access token (JWT)
-   ▼
-Next.js frontend  ──HTTPS + Bearer token──>  FastAPI backend
-                                               │  validates JWT (issuer/aud/keys)
-                                               │  extracts roles/groups
-                                               ├─> Azure AI Foundry (via provider)
-                                               ├─> Azure SQL (SQLAlchemy)
-                                               ├─> Azure Blob Storage
-                                               └─> Azure Key Vault / Managed Identity
+```mermaid
+flowchart LR
+    Browser -->|"/ and /api/* (HTTPS)"| Web[web: Next.js<br/>public]
+    Web -->|"/api/* + bearer token"| API[api: FastAPI<br/>internal only]
+    API --> PG[(PostgreSQL)]
+    API -->|managed identity| AOAI[UNC Azure OpenAI]
+    Browser -. sign-in .-> Entra[Entra ID]
 ```
 
-The frontend **never** calls Azure AI Foundry (or any privileged Azure service)
-directly. All privileged calls go through the backend. See
-[`docs/architecture.md`](docs/architecture.md) and
-[`docs/adr/0002-backend-only-ai-access.md`](docs/adr/0002-backend-only-ai-access.md).
+## Quick start (local)
 
-## Tech stack
+Needs Python 3.11, Node 22, and Docker.
 
-| Layer | Choice |
+```bash
+make install    # .venv + API and web dependencies
+make dev        # Postgres in docker; API :8000 and web :3000 with hot reload
+```
+
+Open <http://localhost:3000>. Locally, sign-in is off and the AI is a mock that
+echoes your prompt, so nothing in Azure is needed. To use the real models or real
+sign-in, see [docs/local-development.md](docs/local-development.md).
+
+`make check` runs everything CI runs. `make help` lists the rest.
+
+## What's here
+
+| Path | What |
 | --- | --- |
-| Frontend | Next.js (App Router) + TypeScript, MSAL, Tailwind CSS |
-| Backend | FastAPI + Python 3.11 |
-| Auth | Microsoft Entra ID (OAuth2 / OIDC) |
-| AI | Azure AI Foundry (mockable) |
-| Database | Azure SQL (SQLAlchemy + Alembic) |
-| Storage | Azure Blob Storage |
-| Search/RAG | Azure AI Search (optional) |
-| Hosting | Azure Container Apps |
-| Secrets | Azure Key Vault |
-| Observability | Azure Monitor / App Insights / OpenTelemetry |
-| CI/CD | GitHub Actions (OIDC to Azure) |
-| Infra | Bicep |
-| Tests | pytest, Vitest + React Testing Library, Playwright |
+| `web/` | Next.js 16 (App Router), Tailwind v4 with UNC tokens, MSAL sign-in, streaming chat, typed API client |
+| `api/` | FastAPI: Entra token validation, AI provider layer (streaming, JSON output, embeddings), PostgreSQL + Alembic, audit trail |
+| `deploy/env-contract.json` | Every setting each container may receive, and who owns it |
+| `scripts/` | `ci.sh`, `publish.sh`, `cd.sh` (the FO-AI script contract) plus `smoke.sh`, `dev.sh` |
+| `infra/` | Bicep and per-resource deploy scripts (run by hand, once per environment) |
+| `docs/` | Architecture, local development, AI, security, runbook, ADRs |
 
-## Local setup
+## Building your tool
 
-Prerequisites: **Docker**, **Node 20 LTS or 22 LTS**, **Python 3.11+**, and
-(optionally) `make`. Full details in
-[`docs/local-development.md`](docs/local-development.md).
+- **Add an API endpoint:** a router in `api/app/api/v1/routes/`, registered in
+  `api/app/api/v1/router.py`; Pydantic schemas in `api/app/schemas/`; depend on
+  `CurrentUser` (or `AdminUser`) for auth. Then `make generate-api` and commit
+  `web/src/lib/api/schema.ts`.
+- **Add a page:** `web/src/app/<route>/page.tsx`, a link in `NAV_ITEMS`
+  (`web/src/components/AppShell.tsx`), and a client method in
+  `web/src/lib/api/client.ts`. Load data with `useApiResource`.
+- **Use AI:** depend on `AI` (`app/services/ai/factory.py`) and call `chat`,
+  `stream_chat`, `complete_json(messages, MyPydanticModel)`, or `embed`. Keep
+  prompts in `api/app/prompts/*.md`. See [docs/ai.md](docs/ai.md).
+- **Add a table:** a model in `api/app/models/`, imported in
+  `api/app/models/__init__.py`, then `make migration m="..."`.
+- **Add a setting:** a field in `api/app/core/config.py`, an owner in
+  `deploy/env-contract.json`, and the GitHub variable or secret. CI fails until
+  all three agree.
+{%- if cookiecutter.enable_ai_search == "yes" %}
+- **Ask your documents (RAG):** see [docs/rag.md](docs/rag.md).
+{%- endif %}
 
-```bash
-cp .env.example .env
-make dev        # frontend :3000, backend :8000, SQL Server (docker) :1433
-```
+## Shipping
 
-`make dev` runs everything with `AI_PROVIDER=mock` and `AUTH_MODE=disabled`, so
-**no real Azure resources are required** to run locally.
-The API container applies Alembic migrations automatically on startup.
+Every push to `main` runs CI; when it passes, `publish` builds both images once,
+smoke-tests them, and pushes them to ACR, and CD promotes those exact digests to
+the `dev` environment, verifies the site end to end, and rolls back on failure.
+First-time Azure setup (resources, app registrations, GitHub variables) is in
+[docs/runbook.md](docs/runbook.md).
 
-Without `make`:
+## Docs
 
-```bash
-docker compose up --build
-```
-
-## Environment variables
-
-Copy `.env.example` to `.env` and adjust. Frontend-specific values live in
-`web/.env.local.example`. Key variables:
-
-| Variable | Where | Default (local) | Purpose |
-| --- | --- | --- | --- |
-| `AI_PROVIDER` | backend | `mock` | `mock` or `foundry` |
-| `AUTH_MODE` | backend | `disabled` | `disabled` (local only!) or `entra` |
-| `AZURE_TENANT_ID` | backend | placeholder | Entra tenant |
-| `ENTRA_BACKEND_CLIENT_ID` | backend | placeholder | API audience |
-| `ENTRA_BACKEND_APP_ID_URI` | backend | placeholder | Expected `aud` |
-| `DATABASE_URL` | backend | local SQL Server | SQLAlchemy URL |
-| `ADMIN_GROUP_ID` | backend | placeholder | Group/role for admin routes |
-| `AZURE_AI_FOUNDRY_ENDPOINT` | backend | — | Foundry endpoint (prod) |
-| `NEXT_PUBLIC_API_BASE_URL` | frontend | `http://localhost:8000` | Backend base URL |
-| `NEXT_PUBLIC_ENTRA_CLIENT_ID` | frontend | placeholder | SPA client id |
-| `NEXT_PUBLIC_ENTRA_TENANT_ID` | frontend | placeholder | Tenant |
-| `NEXT_PUBLIC_ENTRA_API_SCOPE` | frontend | placeholder | API scope to request |
-
-Full list with descriptions is in `.env.example`.
-
-## Running the backend
-
-```bash
-cd api
-python3.11 -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
-alembic upgrade head           # apply migrations (needs a reachable DB)
-uvicorn app.main:app --reload  # http://localhost:8000  (docs at /docs)
-```
-
-## Running the frontend
-
-```bash
-cd web
-cp .env.local.example .env.local
-npm install
-npm run dev                    # http://localhost:3000
-```
-
-Tailwind CSS is enabled by default. Customize the starter theme tokens in
-`web/src/app/globals.css`, then use Tailwind utility classes in your
-components.
-
-## Running tests
-
-```bash
-# Backend
-cd api && pytest
-
-# Frontend unit/component tests
-cd web && npm run test
-
-# Frontend E2E smoke test (Playwright)
-cd web && npx playwright install --with-deps && npm run test:e2e
-```
-
-Backend tests use the **mock AI provider** and an in-memory SQLite database, so
-they need no Azure credentials.
-
-## Auth setup overview
-
-1. Register two apps in Microsoft Entra ID: a **SPA** (frontend) and a **Web/API**
-   (backend). Expose an API scope (e.g. `access_as_user`) on the backend app.
-2. Grant the SPA delegated permission to the backend API scope.
-3. Set the frontend `NEXT_PUBLIC_ENTRA_*` values and the backend
-   `AZURE_TENANT_ID` / `ENTRA_BACKEND_*` values.
-4. For admin routes, put users in an Entra **group** (or assign an **app role**)
-   and set `ADMIN_GROUP_ID`.
-
-Detailed walkthrough: [`docs/security.md`](docs/security.md) and the runbook.
-
-## Azure setup overview
-
-Infrastructure now supports **per-service, resource-group scoped** deployments:
-
-- Group-scoped Bicep entrypoints: [`infra/bicep/services`](infra/bicep/services)
-- One-service deploy scripts: [`infra/scripts`](infra/scripts)
-- Local dependency/output state file: `infra/state/<resource-group>.json`
-
-`infra/bicep/main.bicep` is still present as a **legacy monolithic path** for
-backward compatibility, but the recommended workflow is one service per run into
-an existing resource group.
-
-## Deployment overview
-
-Deployment can still run via GitHub Actions using OIDC federation, but manual
-workstation deploys should use per-service scripts:
-
-```bash
-export SQL_ADMIN_PASSWORD='...'
-export API_IMAGE='REPLACE_ME.azurecr.io/{{ cookiecutter.project_slug }}-api:<tag>'
-export WEB_IMAGE='REPLACE_ME.azurecr.io/{{ cookiecutter.project_slug }}-web:<tag>'
-
-cd infra/scripts
-./deploy-identity.sh -g rg-nimbus -e dev -l {{ cookiecutter.azure_location }}
-./deploy-observability.sh -g rg-nimbus -e dev -l {{ cookiecutter.azure_location }}
-./deploy-registry.sh -g rg-nimbus -e dev -l {{ cookiecutter.azure_location }}
-./deploy-storage.sh -g rg-nimbus -e dev -l {{ cookiecutter.azure_location }}
-./deploy-postgres.sh -g rg-nimbus -e dev -l {{ cookiecutter.azure_location }} --sql-admin-password "$SQL_ADMIN_PASSWORD"
-./deploy-key-vault.sh -g rg-nimbus -e dev -l {{ cookiecutter.azure_location }} --sql-admin-password "$SQL_ADMIN_PASSWORD"
-./deploy-container-apps-env.sh -g rg-nimbus -e dev -l {{ cookiecutter.azure_location }}
-# optional:
-./deploy-search.sh -g rg-nimbus -e dev -l {{ cookiecutter.azure_location }}
-./deploy-api-app.sh -g rg-nimbus -e dev -l {{ cookiecutter.azure_location }} --image "$API_IMAGE"
-./deploy-web-app.sh -g rg-nimbus -e dev -l {{ cookiecutter.azure_location }} --image "$WEB_IMAGE"
-```
-
-See [`docs/runbook.md`](docs/runbook.md) for full dependency details and
-parameter guidance.
-
-## Creating a new project from the template
-
-This repo was generated from `ai-tool-starter`:
-
-```bash
-cookiecutter path/to/ai-tool-starter
-```
-
-## What to change for a real project
-
-- Replace every placeholder GUID (`00000000-...`) with real Entra/Azure values,
-  supplied via env vars or Key Vault — never commit them.
-- Set `AUTH_MODE=entra` and `AI_PROVIDER=foundry` outside local dev.
-- Review `api/app/services/ai/foundry_provider.py` and pin the AI SDK
-  version you deploy against.
-- Set real `resource_prefix`, region, and SQL admin credentials in Bicep params
-  (via Key Vault / pipeline secrets).
-- Add your own tables/migrations and domain routes.
-
-## Security notes
-
-- Auth can be disabled locally (`AUTH_MODE=disabled`) — this is **loudly unsafe**
-  and must never be used in a deployed environment. The backend logs a warning
-  on every request when disabled.
-- Privileged calls (AI, DB, storage) only happen server-side.
-- Secrets come from Key Vault via managed identity in Azure. Nothing sensitive is
-  committed. See [`docs/security.md`](docs/security.md).
-
-## Known limitations
-
-- The Foundry provider is a **scaffold**: it isolates the SDK call in one adapter
-  method you must confirm against your installed `azure-ai-*` package version.
-- No production-grade rate limiting, caching, or multi-tenant isolation.
-- Authorization is coarse (admin group/role); add finer-grained checks as needed.
-- Bicep is intentionally minimal (single environment per deployment, basic SKUs).
+- [Architecture](docs/architecture.md)
+- [Local development](docs/local-development.md)
+- [AI layer and UNC Azure OpenAI](docs/ai.md)
+{%- if cookiecutter.enable_ai_search == "yes" %}
+- [Ask the documents (RAG)](docs/rag.md)
+{%- endif %}
+- [Security](docs/security.md)
+- [Runbook: first deploy and operations](docs/runbook.md)
+- [Architecture decision records](docs/adr/)
+- [AGENTS.md](AGENTS.md): conventions for coding agents (and humans)

@@ -18,13 +18,18 @@ Standardize on:
   strong typing, first-class Vercel/Node tooling and static/SSR options.
 - **FastAPI + Python** backend — fast to write, typed via Pydantic, excellent for
   AI/data workloads where the Python ecosystem lives, automatic OpenAPI.
-- **Microsoft Entra ID** for auth — the organization's identity provider; SSO,
-  conditional access, app roles/groups come for free.
-- **Azure AI Foundry** for AI — the sanctioned platform for model access,
-  governance, and quotas, reachable with managed identity.
+- **Microsoft Entra ID** for auth — UNC's identity provider (Onyen sign-in); SSO,
+  conditional access, and app roles come for free.
+- **UNC's Azure OpenAI / AI Foundry** for AI — the sanctioned model access, with
+  governance and quotas owned by UNC, reachable with managed identity.
+- **Tailwind CSS** with UNC brand tokens for styling, held to WCAG 2.2 AA.
 
-Supporting choices: Azure SQL, Blob Storage, optional AI Search, Key Vault,
-Container Apps, App Insights, GitHub Actions, and Bicep.
+Supporting choices: PostgreSQL Flexible Server, Blob Storage, optional AI Search,
+Key Vault, Container Apps, Application Insights, Bicep, and GitHub Actions through
+the shared FO-AI/automation workflows ([0006](0006-fo-ai-script-contract.md)).
+
+Updated 2026-10: Azure SQL replaced by PostgreSQL (lighter local development, Entra
+or password auth, pgvector available); CI/CD moved to the FO-AI script contract.
 
 ## Consequences
 
