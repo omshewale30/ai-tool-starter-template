@@ -1,0 +1,83 @@
+@import "tailwindcss";
+
+/*
+  Design tokens (Tailwind v4, CSS-first). Every color utility in the app comes
+  from here, so a tool restyles by editing this block only.
+
+  UNC palette and how to use it (UNC-Chapel Hill identity guidelines):
+  - Carolina Blue #4B9CD3 is the dominant brand color, but it is a SURFACE and
+    BORDER color: it measures 3.0:1 on white, which passes for large text and UI
+    boundaries only. Never put body text in it, or white body text on it.
+  - White text sits on Bolin Creek #2C5080 (8.1:1) or Navy #13294B (14.5:1).
+  - Link text uses UNC's digital-link blue #007FAE (4.5:1, on white only).
+  The bar is WCAG 2.2 AA: 4.5:1 for text under 24px, 3:1 for UI boundaries and
+  focus indicators. Re-measure any pair you change.
+*/
+@theme {
+  --color-unc-blue: #4b9cd3;
+  --color-unc-navy: #13294b;
+  --color-unc-bolin: #2c5080;
+  --color-unc-fountain: #b7d7ed;
+  --color-unc-cloud: #edf5fb;
+  --color-unc-slate: #5b6670;
+  --color-unc-link: #007fae;
+
+  --color-page: #f7f9fb;
+  --color-surface: #ffffff;
+  --color-text: #1f2933;
+  --color-muted: #5b6670;
+  /* Decorative dividers. Input and control outlines use border-strong (3:1+). */
+  --color-border: #d9e1e8;
+  --color-border-strong: #6b7580;
+
+  --color-danger: #b42318;
+  --color-danger-bg: #fef3f2;
+  --color-warning: #7a4a00;
+  --color-warning-bg: #fff8e1;
+  --color-success: #1e6b3a;
+  --color-success-bg: #ecf7ef;
+
+  /* UNC's brand sans is Open Sans; Arial is the sanctioned substitute. To use Open
+     Sans, self-host it with next/font/local (the CSP blocks font CDNs). */
+  --font-sans: Arial, "Helvetica Neue", Helvetica, sans-serif;
+  --radius-app: 0.5rem;
+}
+
+@layer base {
+  html {
+    @apply bg-page text-text antialiased;
+    font-family: var(--font-sans);
+  }
+
+  body {
+    @apply min-h-screen text-base leading-relaxed;
+  }
+
+  a {
+    @apply text-unc-link underline-offset-2 hover:underline;
+  }
+
+  h1 {
+    @apply text-2xl font-bold text-unc-navy;
+  }
+
+  h2 {
+    @apply text-lg font-semibold text-unc-navy;
+  }
+
+  /* Visible focus everywhere, including Windows forced-colors mode (outline, not shadow). */
+  :focus-visible {
+    outline: 3px solid var(--color-unc-navy);
+    outline-offset: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

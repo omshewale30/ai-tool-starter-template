@@ -1,0 +1,42 @@
+{
+  "name": "__INDEX__-skillset",
+  "description": "Split documents into overlapping chunks and embed each chunk with Azure OpenAI.",
+  "skills": [
+    {
+      "@odata.type": "#Microsoft.Skills.Text.SplitSkill",
+      "name": "split",
+      "context": "/document",
+      "textSplitMode": "pages",
+      "maximumPageLength": 2000,
+      "pageOverlapLength": 400,
+      "inputs": [{ "name": "text", "source": "/document/content" }],
+      "outputs": [{ "name": "textItems", "targetName": "pages" }]
+    },
+    {
+      "@odata.type": "#Microsoft.Skills.Text.AzureOpenAIEmbeddingSkill",
+      "name": "embed",
+      "context": "/document/pages/*",
+      "resourceUri": "__AOAI_ENDPOINT__",
+      "deploymentId": "__EMBEDDING_DEPLOYMENT__",
+      "modelName": "__EMBEDDING_MODEL__",
+      "dimensions": __DIMENSIONS__,
+      "inputs": [{ "name": "text", "source": "/document/pages/*" }],
+      "outputs": [{ "name": "embedding", "targetName": "text_vector" }]
+    }
+  ],
+  "indexProjections": {
+    "selectors": [
+      {
+        "targetIndexName": "__INDEX__",
+        "parentKeyFieldName": "parent_id",
+        "sourceContext": "/document/pages/*",
+        "mappings": [
+          { "name": "chunk", "source": "/document/pages/*" },
+          { "name": "text_vector", "source": "/document/pages/*/text_vector" },
+          { "name": "title", "source": "/document/metadata_storage_name" }
+        ]
+      }
+    ],
+    "parameters": { "projectionMode": "skipIndexingParentDocuments" }
+  }
+}

@@ -24,9 +24,13 @@ Host both services on **Azure Container Apps**.
 - **Managed identity + Key Vault + ACR** integrate cleanly, supporting our
   keyless auth posture (see [0002](0002-backend-only-ai-access.md)).
 - **Log Analytics / App Insights** integration is native.
+- **Topology.** Only the web app has public ingress; the API's ingress is internal
+  and the web forwards `/api/*` to it ([0004](0004-web-forwards-api-internal.md)).
+  Both apps run one active revision with at least one replica, which the deploy's
+  health gate relies on.
 - **Trade-offs.** Less low-level control than AKS (no custom operators, limited
   networking primitives). If a project outgrows ACA (complex service mesh,
   specialized workloads), migrate that service to AKS — the container images are
   unchanged.
-- Bicep provisions the ACA environment and both apps; deploys roll new image tags
-  via `az containerapp update`.
+- Bicep creates the ACA environment and both apps once; after that `scripts/cd.sh`
+  owns each app's image (by digest) and env ([0005](0005-publish-once-runtime-config.md)).

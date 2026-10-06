@@ -1,0 +1,50 @@
+name: CD
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      allow-prune:
+        description: >-
+          Remove container env vars that deploy/env-contract.json does not render
+          (for example ones set by hand in the portal). The run fails and names them otherwise.
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  # Promotes the commit CI just published. scripts/cd.sh resolves the digests itself
+  # from IMAGE_TAG; the wrapper owns checkout, the dev environment, concurrency, the
+  # stale-main check, and Azure login.
+  deploy:
+    # workflow_run fires for every CI completion. Only a successful CI on a push to main
+    # may deploy automatically; a dispatch redeploys current main.
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    permissions:
+      contents: read
+      id-token: write
+    # Pinned by full SHA; must pass DEPLOYMENT_SECRETS_JSON (FO-AI/automation#5), which
+    # scripts/cd.sh requires. Bump ci.yml and cd.yml together.
+    uses: FO-AI/automation/.github/workflows/reusable-azure-cd.yml@2b57fa6020a4be6f65b3c910e2756689b937395a
+    with:
+      environment: dev
+      allow-manual: true
+      # scripts/cd.sh renders env with scripts/deploy_env.py; pin its interpreter.
+      python-version: '3.11'
+      # Pruning is an explicit, manual-only opt-in; `inputs` is empty on workflow_run.
+      deploy-command: ${{ github.event_name == 'workflow_dispatch' && inputs.allow-prune && 'ALLOW_PRUNE=true bash scripts/cd.sh' || 'bash scripts/cd.sh' }}
+    # inherit, not an explicit map: this caller declares no environment, so an explicit
+    # `secrets.DATABASE_URL` would resolve to a repository secret that does not exist.
+    # The wrapper's job enters `dev` and reads the environment's secrets itself.
+    secrets: inherit

@@ -1,59 +1,62 @@
-# {{ cookiecutter.project_name }} — developer shortcuts.
-# Run `make help` to list targets.
+# {{ cookiecutter.project_name }} — developer shortcuts. `make help` lists targets.
 
 .DEFAULT_GOAL := help
 SHELL := /bin/bash
 PYTHON ?= python3.11
+VENV := .venv/bin
 
-.PHONY: help dev up down logs api web install-api install-web \
-        test test-api test-web e2e lint typecheck fmt migrate
+.PHONY: help install dev up down logs migrate migration check test test-api test-web e2e \
+        lint fmt generate-api
 
 help: ## Show this help
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
+	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
 
-dev: up ## Alias for `up` (full local stack)
+install: ## Create .venv, install API (editable) and web dependencies
+	$(PYTHON) -m venv .venv
+	$(VENV)/pip install --upgrade pip
+	$(VENV)/pip install -e "./api[dev]"
+	npm --prefix web ci
 
-up: ## Start frontend + backend + db locally (mock AI, disabled auth)
+dev: ## Postgres in docker + API and web with hot reload (mock AI, sign-in off)
+	bash scripts/dev.sh
+
+up: ## Whole stack in docker compose (API image, next dev, Postgres)
 	docker compose up --build
 
-down: ## Stop and remove the local stack
+down: ## Stop docker compose and delete its volumes
 	docker compose down -v
 
-logs: ## Tail logs from the local stack
+logs: ## Tail docker compose logs
 	docker compose logs -f
 
-install-api: ## Install backend dependencies into a venv
-	cd apps/api && $(PYTHON) -m venv .venv && . .venv/bin/activate && pip install -e ".[dev]"
+migrate: ## Apply database migrations (uses DATABASE_URL from .env)
+	set -a; . ./.env; set +a; cd api && ../$(VENV)/alembic upgrade head
 
-install-web: ## Install frontend dependencies
-	cd apps/web && npm install
+migration: ## New migration from model changes: make migration m="add widgets"
+	set -a; . ./.env; set +a; cd api && ../$(VENV)/alembic revision --autogenerate -m "$(m)"
 
-api: ## Run the backend with autoreload (needs a reachable DB)
-	cd apps/api && . .venv/bin/activate && uvicorn app.main:app --reload
+check: ## Everything CI's checks run (scripts/ci.sh backend + frontend)
+	PATH="$(CURDIR)/.venv/bin:$$PATH" bash scripts/ci.sh backend
+	PATH="$(CURDIR)/.venv/bin:$$PATH" bash scripts/ci.sh frontend
 
-web: ## Run the frontend dev server
-	cd apps/web && npm run dev
+test: test-api test-web ## Unit tests only (fast)
 
-migrate: ## Apply database migrations
-	cd apps/api && . .venv/bin/activate && alembic upgrade head
+test-api: ## API tests (mock AI, in-memory SQLite)
+	cd api && ENVIRONMENT=test AUTH_MODE=disabled AI_PROVIDER=mock ../$(VENV)/pytest
 
-test: test-api test-web ## Run all unit/component tests
+test-web: ## Web unit/component tests
+	npm --prefix web test
 
-test-api: ## Run backend tests (mock AI, in-memory DB)
-	cd apps/api && . .venv/bin/activate && pytest
+e2e: ## Playwright against the real API behind a production web build
+	PYTHON="$(CURDIR)/.venv/bin/python" npm --prefix web run test:e2e
 
-test-web: ## Run frontend unit/component tests
-	cd apps/web && npm run test
+lint: ## Lint API (ruff) and web (eslint)
+	cd api && ../$(VENV)/ruff check app scripts
+	npm --prefix web run lint
 
-e2e: ## Run Playwright smoke tests
-	cd apps/web && npm run test:e2e
+fmt: ## Format and auto-fix the API
+	cd api && ../$(VENV)/ruff format app scripts && ../$(VENV)/ruff check --fix app scripts
 
-lint: ## Lint frontend
-	cd apps/web && npm run lint
-
-typecheck: ## Type-check frontend
-	cd apps/web && npm run typecheck
-
-fmt: ## Format backend (ruff)
-	cd apps/api && . .venv/bin/activate && ruff format app && ruff check --fix app
+generate-api: ## Regenerate web/src/lib/api/schema.ts after changing API routes/schemas
+	PYTHON="$(CURDIR)/.venv/bin/python" npm --prefix web run generate:api

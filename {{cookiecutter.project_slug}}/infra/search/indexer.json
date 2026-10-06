@@ -1,0 +1,14 @@
+{
+  "name": "__INDEX__-indexer",
+  "dataSourceName": "__INDEX__-blob",
+  "targetIndexName": "__INDEX__",
+  "skillsetName": "__INDEX__-skillset",
+  "schedule": { "interval": "PT1H" },
+  "parameters": {
+    "configuration": {
+      "dataToExtract": "contentAndMetadata",
+      "parsingMode": "default",
+      "indexedFileNameExtensions": ".pdf,.docx,.doc,.xlsx,.xls,.pptx,.txt,.md,.html,.csv,.json"
+    }
+  }
+}

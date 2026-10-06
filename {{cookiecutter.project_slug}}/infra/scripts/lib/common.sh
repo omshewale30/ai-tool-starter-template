@@ -114,3 +114,53 @@ print_outputs() {
   local deployment_json="$1"
   extract_outputs_json "$deployment_json" | jq .
 }
+
+# Container apps are created once by infra; afterwards scripts/cd.sh owns their image
+# and env. Re-running the Bicep would reset both (to the bootstrap image), so refuse
+# unless the caller asked for it explicitly.
+refuse_if_app_exists() {
+  local app_name="$1"
+  local resource_group="$2"
+  local recreate="$3"
+
+  if [[ "$recreate" == "true" ]]; then
+    return
+  fi
+  if az containerapp show --name "$app_name" --resource-group "$resource_group" --output none 2>/dev/null; then
+    echo "error: $app_name already exists. CD (scripts/cd.sh) owns its image and env now;" >&2
+    echo "       re-running this would reset both. Pass --recreate to do it anyway, then" >&2
+    echo "       re-run the CD workflow (workflow_dispatch) to redeploy main." >&2
+    exit 1
+  fi
+}
+
+# Prints `present` or `missing` for a Key Vault secret (never its value). Owner and
+# Contributor grant no data access to an RBAC vault, and a fresh role assignment takes
+# minutes to apply, so "forbidden" is retried for a while and then reported as what
+# it is, never mistaken for "missing".
+kv_secret_state() {
+  local vault="$1" name="$2" output attempt
+  for attempt in $(seq 1 12); do
+    if output="$(az keyvault secret show --vault-name "$vault" --name "$name" --query id -o tsv 2>&1)"; then
+      echo present
+      return
+    fi
+    case "$output" in
+      *SecretNotFound*|*"was not found"*)
+        echo missing
+        return
+        ;;
+      *Forbidden*|*"not authorized"*|*"does not have secrets get permission"*)
+        echo "waiting for Key Vault access to apply ($attempt/12)..." >&2
+        sleep 10
+        ;;
+      *)
+        echo "error: could not read Key Vault secret $name: $output" >&2
+        exit 1
+        ;;
+    esac
+  done
+  echo "error: you have no data access to Key Vault $vault. Re-run deploy-key-vault.sh" >&2
+  echo "       (it grants the signed-in user Key Vault Secrets Officer) and try again." >&2
+  exit 1
+}

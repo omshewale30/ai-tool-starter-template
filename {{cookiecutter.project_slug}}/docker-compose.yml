@@ -1,57 +1,68 @@
 # Local development stack for {{ cookiecutter.project_name }}.
-# Runs the frontend, backend, and a SQL Server database with mock AI + disabled
-# auth so the app works with no real Azure dependencies.
+# Runs the frontend, backend, and PostgreSQL with mock AI + disabled auth so the
+# app works with no Azure dependencies. `make dev` runs only `db` from here and
+# the API/web natively with hot reload.
 #
 #   docker compose up --build
 #
 services:
   db:
-    image: mcr.microsoft.com/mssql/server:2022-latest
+    image: postgres:16-alpine
     environment:
-      ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: "${SQL_SA_PASSWORD:-Your_password123}"
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-localdev}"
+      POSTGRES_DB: appdb
     ports:
-      - "1433:1433"
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -No -Q 'SELECT 1' || exit 1"]
-      interval: 10s
+      test: ["CMD-SHELL", "pg_isready -U app -d appdb"]
+      interval: 5s
       timeout: 5s
       retries: 10
-      start_period: 30s
 
   api:
     build:
-      context: ./apps/api
-    command: >
-      /bin/bash -lc "alembic upgrade head &&
-      uvicorn app.main:app --host 0.0.0.0 --port 8000"
+      context: ./api
     environment:
       ENVIRONMENT: local
       AI_PROVIDER: "${AI_PROVIDER:-mock}"
       AUTH_MODE: "${AUTH_MODE:-disabled}"
-      CORS_ALLOW_ORIGINS: "http://localhost:3000"
-      DATABASE_URL: "mssql+pyodbc://sa:${SQL_SA_PASSWORD:-Your_password123}@db:1433/master?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes"
+      DATABASE_URL: "postgresql+psycopg://app:${POSTGRES_PASSWORD:-localdev}@db:5432/appdb"
       AZURE_TENANT_ID: "${AZURE_TENANT_ID:-}"
       ENTRA_BACKEND_CLIENT_ID: "${ENTRA_BACKEND_CLIENT_ID:-}"
       ENTRA_BACKEND_APP_ID_URI: "${ENTRA_BACKEND_APP_ID_URI:-}"
       ADMIN_GROUP_ID: "${ADMIN_GROUP_ID:-}"
+      AZURE_AI_FOUNDRY_ENDPOINT: "${AZURE_AI_FOUNDRY_ENDPOINT:-}"
+      AZURE_AI_FOUNDRY_DEPLOYMENT_NAME: "${AZURE_AI_FOUNDRY_DEPLOYMENT_NAME:-}"
     ports:
       - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
 
+  # The web app runs `next dev` here, not the production image: sign-in can only be
+  # disabled at build time (NEXT_PUBLIC_AUTH_DISABLED), and the published image is
+  # always built with it off. `scripts/smoke.sh` exercises the production image.
   web:
-    build:
-      context: ./apps/web
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm ci --no-audit --no-fund && npm run dev -- --hostname 0.0.0.0"
     environment:
-      NEXT_PUBLIC_API_BASE_URL: "http://localhost:8000"
-      NEXT_PUBLIC_AUTH_DISABLED: "true"
-      NEXT_PUBLIC_ENTRA_CLIENT_ID: "${NEXT_PUBLIC_ENTRA_CLIENT_ID:-}"
-      NEXT_PUBLIC_ENTRA_TENANT_ID: "${NEXT_PUBLIC_ENTRA_TENANT_ID:-}"
-      NEXT_PUBLIC_ENTRA_API_SCOPE: "${NEXT_PUBLIC_ENTRA_API_SCOPE:-}"
-      NEXT_PUBLIC_ENTRA_REDIRECT_URI: "http://localhost:3000"
+      BACKEND_ORIGIN: "http://api:8000"
+      NEXT_PUBLIC_AUTH_DISABLED: "${NEXT_PUBLIC_AUTH_DISABLED:-true}"
+      ENTRA_CLIENT_ID: "${ENTRA_CLIENT_ID:-}"
+      ENTRA_TENANT_ID: "${ENTRA_TENANT_ID:-}"
+      ENTRA_API_SCOPE: "${ENTRA_API_SCOPE:-}"
+    volumes:
+      - ./web:/app
+      - web_node_modules:/app/node_modules
     ports:
       - "3000:3000"
     depends_on:
       - api
+
+volumes:
+  db_data:
+  web_node_modules:

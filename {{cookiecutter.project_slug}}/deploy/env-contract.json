@@ -1,0 +1,115 @@
+{
+  "_comment": [
+    "Which environment variables may reach each container app, where each one comes from,",
+    "and what must be true of them before scripts/cd.sh is allowed to change anything.",
+    "Rendered and enforced by scripts/deploy_env.py.",
+    "",
+    "Every variable a container receives has exactly one owner:",
+    "  variables    - a GitHub variable of the same name (dev environment or repository),",
+    "                 read from DEPLOYMENT_VARS_JSON. Visible in `gh variable list`.",
+    "  derived      - computed by cd.sh (the environment name, the API's internal origin).",
+    "  infra        - set by infra/bicep and carried over from the running app unchanged.",
+    "  secret_refs  - bound to a Key Vault-backed secret that infra/bicep declared on the app.",
+    "  secrets      - a GitHub secret (dev environment), read from DEPLOYMENT_SECRETS_JSON",
+    "                 and written to the named Key Vault secret, never to the container env;",
+    "                 the app reads it through its secret_ref.",
+    "",
+    "Only names listed under variables, rename, and secrets are read from GitHub. Both",
+    "objects hold every variable and secret the run can see, most of them not app config",
+    "(AZURE_CLIENT_ID there is the deploy's sign-in app, not the API's identity), so",
+    "everything else in them is ignored, and each name is read only from its own kind.",
+    "",
+    "Env is applied with --replace-env-vars, so anything on the running app that this",
+    "contract does not render is removed. cd.sh refuses that unless ALLOW_PRUNE=true.",
+    "",
+    "`omitted` names Settings fields that are deliberately NOT deployable.",
+    "scripts/tests/test_env_contract.py asserts the api sections cover the Settings surface",
+    "exactly, and the web sections cover exactly the runtime env the web server reads.",
+    "",
+    "Adding a setting: add the Settings field (api/app/core/config.py), give it one owner",
+    "here, and set the GitHub variable or secret. CI fails until all three agree."
+  ],
+
+  "api": {
+    "variables": [
+      "AUTH_MODE",
+      "AZURE_TENANT_ID",
+      "ENTRA_BACKEND_CLIENT_ID",
+      "ENTRA_BACKEND_APP_ID_URI",
+      "ADMIN_GROUP_ID",
+      "JWT_LEEWAY_SECONDS",
+      "LOG_LEVEL",
+      "CORS_ALLOW_ORIGINS",
+      "AI_PROVIDER",
+      "AZURE_AI_FOUNDRY_ENDPOINT",
+      "AZURE_AI_FOUNDRY_PROJECT_NAME",
+      "AZURE_AI_FOUNDRY_DEPLOYMENT_NAME",
+      "AZURE_AI_FOUNDRY_EMBEDDING_DEPLOYMENT_NAME",
+      "AZURE_AI_FOUNDRY_API_VERSION",
+      "AI_REQUEST_TIMEOUT_SECONDS",
+      "AI_MAX_RETRIES",
+      "AI_MAX_OUTPUT_TOKENS",
+      "AZURE_STORAGE_ACCOUNT_URL",
+      "AZURE_STORAGE_CONTAINER",
+      "AZURE_SEARCH_ENDPOINT",
+      "AZURE_SEARCH_INDEX"
+    ],
+    "rename": {},
+    "defaults": {
+      "AI_PROVIDER": "foundry"
+    },
+    "derived": {
+      "ENVIRONMENT": "The deployment target (dev), not a per-repo choice."
+    },
+    "infra": {
+      "AZURE_CLIENT_ID": "The user-assigned identity's client id, for DefaultAzureCredential (api-app.bicep)."
+    },
+    "secret_refs": {
+      "DATABASE_URL": { "secret": "database-url", "required": true },
+      "APPLICATIONINSIGHTS_CONNECTION_STRING": { "secret": "appinsights-connection-string" }
+    },
+    "secrets": {
+      "DATABASE_URL": "database-url"
+    },
+    "omitted": {
+      "APP_NAME": "A product constant; the default is the project name.",
+      "API_V1_PREFIX": "The route prefix is part of the API contract, not configuration."
+    },
+    "required": [
+      "AUTH_MODE",
+      "AZURE_TENANT_ID",
+      "ENTRA_BACKEND_CLIENT_ID",
+      "ENTRA_BACKEND_APP_ID_URI",
+      "DATABASE_URL"
+    ],
+    "rules": [
+      { "key": "AUTH_MODE", "equals": "entra",
+        "why": "disabled is local-only; deployed, it signs every caller in as an admin." },
+      { "key": "DATABASE_URL", "not_contains": ["localhost", "127.0.0.1"],
+        "why": "Must point at the deployed database." }
+    ]
+  },
+
+  "web": {
+    "variables": [
+      "ENTRA_CLIENT_ID",
+      "ENTRA_TENANT_ID",
+      "ENTRA_API_SCOPE"
+    ],
+    "rename": {},
+    "defaults": {},
+    "derived": {
+      "BACKEND_ORIGIN": "https:// + the API app's internal ingress FQDN, read from Azure."
+    },
+    "infra": {},
+    "secret_refs": {},
+    "secrets": {},
+    "omitted": {},
+    "required": [
+      "ENTRA_CLIENT_ID",
+      "ENTRA_TENANT_ID",
+      "ENTRA_API_SCOPE"
+    ],
+    "rules": []
+  }
+}

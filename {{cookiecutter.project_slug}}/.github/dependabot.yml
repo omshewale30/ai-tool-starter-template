@@ -1,0 +1,27 @@
+# Weekly dependency updates, grouped to keep PR noise low. CI (`verify`) gates each.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /api
+    schedule: { interval: weekly }
+    groups:
+      python: { patterns: ["*"] }
+
+  - package-ecosystem: npm
+    directory: /web
+    schedule: { interval: weekly }
+    groups:
+      npm-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: docker
+    directories: [/api, /web]
+    schedule: { interval: weekly }
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
+    # The FO-AI/automation reusable workflows are pinned by commit on purpose and
+    # bumped together by hand (docs/adr/0006-fo-ai-script-contract.md).
+    ignore:
+      - dependency-name: FO-AI/automation

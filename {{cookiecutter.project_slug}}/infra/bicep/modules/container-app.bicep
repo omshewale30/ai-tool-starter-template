@@ -1,5 +1,9 @@
-// Generic Azure Container App used for both the frontend and backend.
-// Authenticates to ACR and Key Vault via a user-assigned managed identity.
+// Generic Azure Container App used for both the web app and the API.
+//
+// Authenticates to ACR and Key Vault with a user-assigned managed identity. Single
+// revision mode and minReplicas >= 1 are what scripts/cd.sh's health gate requires.
+// After creation, scripts/cd.sh owns the image and the application env; this module
+// owns everything else (identity, registry, ingress, probes, secrets, scale).
 @description('Container app name.')
 param name string
 param location string = resourceGroup().location
@@ -20,8 +24,8 @@ param image string
 @description('Port the container listens on.')
 param targetPort int
 
-@description('Expose publicly (true) or only within the environment (false).')
-param external bool = true
+@description('Expose publicly (true) or only within the Container Apps environment (false).')
+param external bool
 
 @description('Plain environment variables: array of { name, value }.')
 param envVars array = []
@@ -32,8 +36,41 @@ param secretRefs array = []
 @description('Env vars sourced from secrets: array of { name, secretRef }.')
 param secretEnvVars array = []
 
+@description('HTTP path for the liveness probe. Empty uses the platform default (TCP).')
+param livenessPath string = ''
+
+@description('HTTP path for the readiness probe. Empty uses the platform default (TCP).')
+param readinessPath string = ''
+
+param cpu string = '0.5'
+param memory string = '1.0Gi'
+
+@minValue(1)
 param minReplicas int = 1
 param maxReplicas int = 3
+
+var livenessProbes = empty(livenessPath)
+  ? []
+  : [
+      {
+        type: 'Liveness'
+        httpGet: { path: livenessPath, port: targetPort }
+        initialDelaySeconds: 10
+        periodSeconds: 30
+        failureThreshold: 3
+      }
+    ]
+var readinessProbes = empty(readinessPath)
+  ? []
+  : [
+      {
+        type: 'Readiness'
+        httpGet: { path: readinessPath, port: targetPort }
+        initialDelaySeconds: 5
+        periodSeconds: 10
+        failureThreshold: 3
+      }
+    ]
 
 resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: name
@@ -75,10 +112,11 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
           name: name
           image: image
           resources: {
-            cpu: json('0.5')
-            memory: '1.0Gi'
+            cpu: json(cpu)
+            memory: memory
           }
           env: concat(envVars, secretEnvVars)
+          probes: concat(livenessProbes, readinessProbes)
         }
       ]
       scale: {
