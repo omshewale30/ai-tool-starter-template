@@ -15,7 +15,7 @@ Follow the contract documented in the FO-AI/automation README:
 
 | Script | Does | Never |
 | --- | --- | --- |
-| `scripts/ci.sh <check>` | one named check (`backend`, `frontend`); sets its own test env | touches the cloud or reads secrets |
+| `scripts/ci.sh <check>` | one named check (`backend`, `frontend`, `infra`); sets its own test env | touches the cloud or reads secrets |
 | `scripts/publish.sh` | builds `<repo>-api`/`<repo>-web` at the commit SHA in ACR, smoke-tests the pushed digests | deploys, tags `latest` |
 | `scripts/cd.sh` | resolves digests, validates config, rechecks `main`, rolls out API then web, verifies, rolls back | builds, accepts a digest from its environment |
 
@@ -25,7 +25,9 @@ commit SHA; bump both together.
 
 ## Consequences
 
-- Infrastructure is created by hand once (`infra/scripts`); CI/CD never provisions.
+- Infrastructure is Terraform applied by an operator (`infra/terraform`,
+  [0007](0007-terraform-infrastructure.md)); CI only formats and validates it, CI/CD
+  never provisions.
 - The deploy scripts are product code with tests (`scripts/tests/`, run by
   `ci.sh backend`) against fake `az`/`gh`/`curl`.
 - Changes to the shared workflows reach this repo only when the pin is bumped.

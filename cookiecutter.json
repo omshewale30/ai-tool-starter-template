@@ -32,6 +32,9 @@
     "scripts/*.py",
     "scripts/tests/*",
     "web/package-lock.json",
-    "web/src/lib/api/schema.ts"
+    "web/src/lib/api/schema.ts",
+    "infra/terraform/modules/*",
+    "infra/terraform/*/.terraform.lock.hcl",
+    "infra/terraform/envs/*/.terraform.lock.hcl"
   ]
 }

@@ -215,7 +215,7 @@ class RenderTests(unittest.TestCase):
 
     def test_missing_required_secret_binding_fails(self):
         self.assertIn(
-            "the app declares no secret database-url for DATABASE_URL; run infra/scripts/deploy-api-app.sh",
+            "the app declares no secret database-url for DATABASE_URL; run terraform apply in infra/terraform/envs/<env>",
             problems_of(render_api, current_app=app(secrets=("foundry-api-key",))),
         )
 

@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   # Every check is `bash scripts/ci.sh <name>`; the script sets its own test-only
-  # environment. Reports as `checks / backend`, `checks / frontend`.
+  # environment. Reports as `checks / backend`, `checks / frontend`, `checks / infra`.
   checks:
     # Pinned by full SHA (FO-AI/automation v2 interface). Bump ci.yml and cd.yml together.
     uses: FO-AI/automation/.github/workflows/reusable-ci.yml@2b57fa6020a4be6f65b3c910e2756689b937395a
@@ -26,7 +26,10 @@ jobs:
           "run":"bash scripts/ci.sh backend"},
          {"name":"frontend","directory":".","python-version":"3.11","node-version":"22",
           "install":"python -m pip install -e './api[dev]' && npm --prefix web ci",
-          "run":"bash scripts/ci.sh frontend"}]
+          "run":"bash scripts/ci.sh frontend"},
+         {"name":"infra","directory":".","python-version":"3.11",
+          "install":"curl -fsSLo /tmp/tf.zip https://releases.hashicorp.com/terraform/1.17.1/terraform_1.17.1_linux_amd64.zip && sudo unzip -oq /tmp/tf.zip terraform -d /usr/local/bin",
+          "run":"bash scripts/ci.sh infra"}]
       # PR-time "does it still build" check. Never pushes; `publish` does that on main.
       # No build args: this builds exactly what ships.
       containers: >-

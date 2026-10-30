@@ -19,9 +19,10 @@ RAG_PATHS = [
     # Web
     os.path.join("web", "src", "app", "documents"),
     # Infra
-    os.path.join("infra", "bicep", "modules", "search.bicep"),
-    os.path.join("infra", "bicep", "services", "search.bicep"),
-    os.path.join("infra", "scripts", "deploy-search.sh"),
+    os.path.join("infra", "terraform", "modules", "search"),
+    os.path.join("infra", "terraform", "modules", "app-stack", "search.tf"),
+    os.path.join("infra", "terraform", "envs", "dev", "search.tf"),
+    os.path.join("infra", "terraform", "envs", "prod", "search.tf"),
     os.path.join("infra", "scripts", "setup-search-index.sh"),
     os.path.join("infra", "search"),
     # Docs

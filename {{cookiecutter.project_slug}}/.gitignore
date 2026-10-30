@@ -37,9 +37,20 @@ test-results/
 *.sqlite3
 *.db
 
-# ---- Infra local state / generated files ----
-infra/state/*.json
-infra/bicep/services/*.json
+# ---- Terraform (commit .terraform.lock.hcl and backend.hcl; never state or plans) ----
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
 .azure/
 
 # Next.js generates this on every build/typegen

@@ -39,7 +39,7 @@ sign-in, see [docs/local-development.md](docs/local-development.md).
 | `api/` | FastAPI: Entra token validation, AI provider layer (streaming, JSON output, embeddings), PostgreSQL + Alembic, audit trail |
 | `deploy/env-contract.json` | Every setting each container may receive, and who owns it |
 | `scripts/` | `ci.sh`, `publish.sh`, `cd.sh` (the FO-AI script contract) plus `smoke.sh`, `dev.sh` |
-| `infra/` | Bicep and per-resource deploy scripts (run by hand, once per environment) |
+| `infra/` | Terraform (`infra/terraform`: modules, `envs/shared`, `envs/dev`, `envs/prod`), applied by an operator; search pipeline definitions |
 | `docs/` | Architecture, local development, AI, security, runbook, ADRs |
 
 ## Building your tool

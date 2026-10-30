@@ -8,8 +8,8 @@
     "  variables    - a GitHub variable of the same name (dev environment or repository),",
     "                 read from DEPLOYMENT_VARS_JSON. Visible in `gh variable list`.",
     "  derived      - computed by cd.sh (the environment name, the API's internal origin).",
-    "  infra        - set by infra/bicep and carried over from the running app unchanged.",
-    "  secret_refs  - bound to a Key Vault-backed secret that infra/bicep declared on the app.",
+    "  infra        - set by infra/terraform and carried over from the running app unchanged.",
+    "  secret_refs  - bound to a Key Vault-backed secret that infra/terraform declared on the app.",
     "  secrets      - a GitHub secret (dev environment), read from DEPLOYMENT_SECRETS_JSON",
     "                 and written to the named Key Vault secret, never to the container env;",
     "                 the app reads it through its secret_ref.",
@@ -62,7 +62,7 @@
       "ENVIRONMENT": "The deployment target (dev), not a per-repo choice."
     },
     "infra": {
-      "AZURE_CLIENT_ID": "The user-assigned identity's client id, for DefaultAzureCredential (api-app.bicep)."
+      "AZURE_CLIENT_ID": "The user-assigned identity's client id, for DefaultAzureCredential (infra/terraform/modules/app-stack/apps.tf)."
     },
     "secret_refs": {
       "DATABASE_URL": { "secret": "database-url", "required": true },

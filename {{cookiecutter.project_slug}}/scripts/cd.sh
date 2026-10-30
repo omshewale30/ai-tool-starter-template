@@ -193,8 +193,8 @@ for service in api web; do
   if ! jq -e --arg registry "$ACR_NAME.azurecr.io" \
       '.properties.configuration.registries[]? | select(.server == $registry and (.identity // "") != "")' \
       "$app_json" > /dev/null; then
-    printf '::error::%s must pull from %s with a managed identity (infra/scripts/deploy-%s-app.sh binds it)\n' \
-      "$app" "$ACR_NAME.azurecr.io" "$service"
+    printf '::error::%s must pull from %s with a managed identity (infra/terraform/modules/container-app binds it; terraform apply)\n' \
+      "$app" "$ACR_NAME.azurecr.io"
     exit 1
   fi
   container="$(jq -r '.properties.template.containers[0].name' "$app_json")"
@@ -211,7 +211,7 @@ done
 # ingress must be internal, and the web is pointed at its actual internal FQDN
 # (<app>.internal.<environment domain>), read from Azure rather than assembled.
 if [[ "$(jq -r '.properties.configuration.ingress.external' "$deploy_tmp/api.app.json")" != false ]]; then
-  printf '::error::%s must have internal ingress; only the web app is public (infra/bicep/services/api-app.bicep)\n' "$API_APP_NAME"
+  printf '::error::%s must have internal ingress; only the web app is public (infra/terraform/modules/app-stack/apps.tf)\n' "$API_APP_NAME"
   exit 1
 fi
 api_fqdn="$(jq -r '.properties.configuration.ingress.fqdn // ""' "$deploy_tmp/api.app.json")"

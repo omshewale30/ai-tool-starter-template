@@ -83,8 +83,9 @@ flowchart TD
   container may receive and where it comes from (GitHub variable, GitHub secret via
   Key Vault, derived by the deploy, or set by infra). A test keeps it in sync with
   `api/app/core/config.py` and with what the web reads.
-- **Infra creates, CD owns.** Bicep creates each container app once; after that the
-  CD workflow owns its image and env (`scripts/cd.sh`).
+- **Infra creates, CD owns.** Terraform (`infra/terraform`) creates each container app
+  and keeps everything but its image and env; the CD workflow owns those
+  (`scripts/cd.sh`), and Terraform ignores them ([0007](adr/0007-terraform-infrastructure.md)).
 
 ## Pipeline
 
@@ -126,4 +127,5 @@ See [ADR 0006](adr/0006-fo-ai-script-contract.md) and [runbook.md](runbook.md).
 | Web auth | `web/src/lib/auth/` |
 | Web → API | `web/src/app/api/[...path]/route.ts`, `web/src/lib/api/` |
 | UI kit | `web/src/components/ui/`, tokens in `web/src/app/globals.css` |
-| Deploy | `scripts/`, `deploy/env-contract.json`, `infra/` |
+| Deploy | `scripts/`, `deploy/env-contract.json` |
+| Infrastructure | `infra/terraform/` (modules, `envs/shared`, `envs/dev`, `envs/prod`) |

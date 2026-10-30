@@ -65,8 +65,8 @@ user-assigned managed identity in Azure (`AZURE_CLIENT_ID` is set by infra) and 
 The model resource belongs to UNC, so you request access rather than grant it.
 Send the resource owners:
 
-- the **principal (object) id** of the app's managed identity: `identity.principalId`
-  in `infra/state/<resource-group>.json` after `deploy-identity.sh`;
+- the **principal (object) id** of the app's managed identity: `principal_id` in
+  `terraform output identity` (run in `infra/terraform/envs/<env>`);
 - the role needed: **Cognitive Services OpenAI User** on the Azure OpenAI resource;
 - which deployments you will call (chat, embeddings), and expected volume;
 - the developers' accounts, if they need the same role for local testing.

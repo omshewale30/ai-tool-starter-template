@@ -1,7 +1,7 @@
 name: CI
 
 # Verifies the Cookiecutter template itself: renders a project per variant and
-# runs that project's own checks (scripts/ci.sh), Bicep compilation, and
+# runs that project's own checks (scripts/ci.sh backend/frontend/infra) and
 # `docker compose config`. See scripts/verify-template.sh.
 on:
   pull_request:
@@ -21,10 +21,10 @@ jobs:
     with:
       checks: >-
         [{"name":"template (search=no)","directory":".","python-version":"3.11","node-version":"22",
-          "install":"python -m pip install cookiecutter",
+          "install":"curl -fsSLo /tmp/tf.zip https://releases.hashicorp.com/terraform/1.17.1/terraform_1.17.1_linux_amd64.zip && sudo unzip -oq /tmp/tf.zip terraform -d /usr/local/bin && python -m pip install cookiecutter",
           "run":"PYTHON=python bash scripts/verify-template.sh --variant no --docker --e2e"},
          {"name":"template (search=yes)","directory":".","python-version":"3.11","node-version":"22",
-          "install":"python -m pip install cookiecutter",
+          "install":"curl -fsSLo /tmp/tf.zip https://releases.hashicorp.com/terraform/1.17.1/terraform_1.17.1_linux_amd64.zip && sudo unzip -oq /tmp/tf.zip terraform -d /usr/local/bin && python -m pip install cookiecutter",
           "run":"PYTHON=python bash scripts/verify-template.sh --variant yes"}]
 
   verify:

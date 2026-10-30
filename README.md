@@ -30,7 +30,7 @@ generated project's `docs/runbook.md` to deploy.
 | **API** (`api/`) | FastAPI with Entra JWT validation and app roles, AI provider layer (chat, SSE streaming, validated JSON output, embeddings; mock for local/tests), prompts as files, PostgreSQL + Alembic, audit trail of AI usage, structured logs with correlation ids, Application Insights tracing |
 | **Topology** | Only the web app is public; it forwards `/api/*` to an internal API. One image per commit, configured at run time, promoted by digest |
 | **CI/CD** | FO-AI script contract: `ci.sh` checks, Playwright e2e, `publish.sh` (build once in ACR + smoke test), `cd.sh` (validated config, Key Vault sync, health-gated rollout, automatic rollback), with ~70 tests for the deploy scripts |
-| **Infra** | Bicep + one script per resource: identity, ACR, Key Vault, PostgreSQL Flexible Server, Storage, Log Analytics/App Insights, Container Apps; optional AI Search |
+| **Infra** | Terraform (azurerm 5.x): one module per resource and an `app-stack` module per environment, roots `envs/shared` (ACR), `envs/dev`, `envs/prod`; identity, Key Vault, PostgreSQL Flexible Server, Storage, Log Analytics/App Insights, Container Apps; optional AI Search |
 | **Optional RAG** | Blob indexer → chunking + embeddings in Azure AI Search → hybrid retrieval → grounded, cited, streamed answers |
 | **Docs** | Architecture, local development, AI and the UNC Azure OpenAI hand-off, security, runbook (first deploy to operations), ADRs, `AGENTS.md` for coding agents |
 
