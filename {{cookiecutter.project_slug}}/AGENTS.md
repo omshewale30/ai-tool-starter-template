@@ -10,7 +10,8 @@
 | --- | --- |
 | Set up | `make install` |
 | Run locally | `make dev` (Postgres in docker, API :8000, web :3000, mock AI, sign-in off) |
-| Everything CI checks | `make check` (`scripts/ci.sh backend` and `frontend`) |
+| Everything CI checks | `make check` (`scripts/ci.sh backend`, `frontend`, `infra`) |
+| Infra plan / apply | `make tf-init tf-plan ENV=dev`, review, `make tf-apply ENV=dev` ([runbook](docs/runbook.md)) |
 | End-to-end | `make e2e` |
 | After changing API routes/schemas | `make generate-api`, commit `web/src/lib/api/schema.ts` |
 | After changing models | `make migration m="..."`, review, `make migrate` |
@@ -35,8 +36,10 @@
   `scripts/ci.sh` never touches the cloud; `publish.sh` never deploys; `cd.sh` never
   builds. The deploy scripts have tests in `scripts/tests/`; keep them passing and add
   a test for each new failure mode.
-- **Infra creates, CD owns.** Don't change container app env or images in Bicep for
-  running apps; change the contract and redeploy.
+- **Infra creates, CD owns.** Terraform ignores container app image and env; change
+  them through the contract and redeploy, never in `infra/terraform`. Everything else
+  about Azure resources lives in Terraform: change it there, run `make check`
+  (`scripts/ci.sh infra`), and `make tf-plan ENV=<env>` before applying.
 - **Never log** tokens, secrets, prompts, answers, or personal data. Audit events
   record usage, not content.
 - **UI:** use the primitives in `web/src/components/ui/` and the tokens in

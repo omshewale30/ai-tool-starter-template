@@ -155,7 +155,7 @@ def render(
             env[key] = f"{key}=secretref:{ref['secret']}"
         elif ref.get("required"):
             problems.append(
-                f"the app declares no secret {ref['secret']} for {key}; run infra/scripts/deploy-{service}-app.sh"
+                f"the app declares no secret {ref['secret']} for {key}; run terraform apply in infra/terraform/envs/<env>"
             )
 
     pruned = sorted(set(current) - set(env))

@@ -25,11 +25,13 @@ Standardize on:
 - **Tailwind CSS** with UNC brand tokens for styling, held to WCAG 2.2 AA.
 
 Supporting choices: PostgreSQL Flexible Server, Blob Storage, optional AI Search,
-Key Vault, Container Apps, Application Insights, Bicep, and GitHub Actions through
+Key Vault, Container Apps, Application Insights, Terraform ([0007](0007-terraform-infrastructure.md)),
+and GitHub Actions through
 the shared FO-AI/automation workflows ([0006](0006-fo-ai-script-contract.md)).
 
 Updated 2026-10: Azure SQL replaced by PostgreSQL (lighter local development, Entra
 or password auth, pgvector available); CI/CD moved to the FO-AI script contract.
+Bicep replaced by Terraform.
 
 ## Consequences
 

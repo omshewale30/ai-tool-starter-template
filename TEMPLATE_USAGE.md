@@ -16,7 +16,8 @@ bash scripts/verify-template.sh --keep       # keep the generated projects (prin
 For each variant it renders the template, commits the result to a fresh git repo,
 installs dependencies, and runs the generated project's own `scripts/ci.sh backend`
 and `frontend` (lint, tests, deploy-script tests, generated-types check, build),
-`az bicep build` on every template, `docker compose config`, and actionlint. It also
+`scripts/ci.sh infra` (`terraform fmt -check` and `validate` on every root; needs
+Terraform ≥ 1.11, required in CI), `docker compose config`, and actionlint. It also
 asserts that RAG files exist only in the RAG variant and that no `cookiecutter.`
 placeholder survives rendering. The template repo's `.github/workflows/ci.yml` runs
 it through the FO-AI reusable CI.
@@ -62,3 +63,12 @@ one `schema.ts` serves both variants.
 - **Next.js**: read `web/node_modules/next/dist/docs/` for the new version; keep
   `web/AGENTS.md` as `next dev` writes it.
 - **Azure AI Search API**: `API_VERSION` in `infra/scripts/setup-search-index.sh`.
+- **Terraform / providers**: `required_version` and provider constraints in each root's
+  `versions.tf`; the Terraform version CI installs in the template's and the generated
+  `.github/workflows/ci.yml`. After changing a constraint, regenerate the lock files in
+  a rendered project (`terraform init -backend=false -upgrade && terraform providers lock
+  -platform=linux_amd64 -platform=linux_arm64 -platform=darwin_arm64 -platform=darwin_amd64
+  -platform=windows_amd64` in `bootstrap` and each `envs/*`) and copy them back.
+- **Terraform in the template**: `infra/terraform/modules/*` and the lock files are in
+  `_copy_without_render`; cookiecutter values belong only in each root's
+  `terraform.tfvars`. RAG's Terraform lives in `search.tf` files the hook deletes.

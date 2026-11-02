@@ -4,6 +4,8 @@
 
 - Python 3.11, Node.js 22, Docker (for PostgreSQL)
 - Optional: Azure CLI (`az login`) to use real Azure OpenAI from your laptop
+- Optional: Terraform ≥ 1.11 for `scripts/ci.sh infra` (part of `make check`) and for
+  infrastructure changes ([runbook](runbook.md))
 
 ## First run
 

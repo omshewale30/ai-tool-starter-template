@@ -32,5 +32,5 @@ Host both services on **Azure Container Apps**.
   networking primitives). If a project outgrows ACA (complex service mesh,
   specialized workloads), migrate that service to AKS — the container images are
   unchanged.
-- Bicep creates the ACA environment and both apps once; after that `scripts/cd.sh`
-  owns each app's image (by digest) and env ([0005](0005-publish-once-runtime-config.md)).
+- Terraform creates the ACA environment and both apps; `scripts/cd.sh` owns each
+  app's image (by digest) and env, which Terraform ignores ([0005](0005-publish-once-runtime-config.md)).

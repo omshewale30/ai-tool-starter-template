@@ -6,7 +6,7 @@ PYTHON ?= python3.11
 VENV := .venv/bin
 
 .PHONY: help install dev up down logs migrate migration check test test-api test-web e2e \
-        lint fmt generate-api
+        lint fmt generate-api tf-init tf-plan tf-apply tf-fmt
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -36,9 +36,10 @@ migrate: ## Apply database migrations (uses DATABASE_URL from .env)
 migration: ## New migration from model changes: make migration m="add widgets"
 	set -a; . ./.env; set +a; cd api && ../$(VENV)/alembic revision --autogenerate -m "$(m)"
 
-check: ## Everything CI's checks run (scripts/ci.sh backend + frontend)
+check: ## Everything CI's checks run (scripts/ci.sh backend, frontend, infra)
 	PATH="$(CURDIR)/.venv/bin:$$PATH" bash scripts/ci.sh backend
 	PATH="$(CURDIR)/.venv/bin:$$PATH" bash scripts/ci.sh frontend
+	@if command -v terraform >/dev/null; then bash scripts/ci.sh infra; else echo "skipped infra: install Terraform >= 1.11"; fi
 
 test: test-api test-web ## Unit tests only (fast)
 
@@ -60,3 +61,19 @@ fmt: ## Format and auto-fix the API
 
 generate-api: ## Regenerate web/src/lib/api/schema.ts after changing API routes/schemas
 	PYTHON="$(CURDIR)/.venv/bin/python" npm --prefix web run generate:api
+
+# ---- Terraform (docs/runbook.md). ENV is a root under infra/terraform/envs: shared, dev, prod.
+ENV ?= dev
+TF := terraform -chdir=infra/terraform/envs/$(ENV)
+
+tf-init: ## terraform init for ENV (default dev) against the remote state
+	$(TF) init -backend-config=../../backend.hcl
+
+tf-plan: ## terraform plan for ENV; saves the plan for tf-apply
+	$(TF) plan -out=tfplan
+
+tf-apply: ## Apply the plan tf-plan saved for ENV
+	$(TF) apply tfplan
+
+tf-fmt: ## Format all Terraform
+	terraform fmt -recursive infra/terraform

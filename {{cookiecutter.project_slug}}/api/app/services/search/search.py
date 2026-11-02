@@ -7,7 +7,7 @@ the index's vectorizer embeds queries the same way. So this service only queries
 one hybrid request (keyword + vector) with no embedding call of its own.
 
 Keyless: DefaultAzureCredential (the container app's managed identity), which holds
-"Search Index Data Reader" on the service (infra/bicep/modules/search.bicep).
+"Search Index Data Reader" on the service (infra/terraform/modules/search).
 """
 
 from __future__ import annotations

@@ -1,0 +1,6 @@
+# Copy to backend.hcl (or: terraform -chdir=bootstrap output -raw backend_config > backend.hcl)
+# and commit it. Every root runs: terraform init -backend-config=../../backend.hcl
+resource_group_name  = "rg-<prefix>-tfstate"
+storage_account_name = "st<prefix>tf<suffix>"
+container_name       = "tfstate"
+use_azuread_auth     = true

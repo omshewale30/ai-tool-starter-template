@@ -9,8 +9,8 @@
 #
 # For each variant this renders the template, commits the result to a fresh git
 # repo (CI checks diff against committed generated files), installs
-# dependencies, and runs the generated project's own `scripts/ci.sh` checks,
-# Bicep compilation, and `docker compose config`.
+# dependencies, and runs the generated project's own `scripts/ci.sh` checks
+# (backend, frontend, and infra: terraform fmt + validate), and `docker compose config`.
 #
 # Env: PYTHON (default python3.11), OUT_DIR (default: a temp dir).
 set -euo pipefail
@@ -79,7 +79,9 @@ verify_variant() {
 
   # Opt-out variants must not carry the optional RAG code paths; opt-in ones must.
   local rag_paths=(api/app/services/search api/app/api/v1/routes/rag.py
-    web/src/app/documents infra/search infra/scripts/setup-search-index.sh docs/rag.md)
+    web/src/app/documents infra/search infra/scripts/setup-search-index.sh docs/rag.md
+    infra/terraform/modules/search infra/terraform/modules/app-stack/search.tf
+    infra/terraform/envs/dev/search.tf infra/terraform/envs/prod/search.tf)
   for path in "${rag_paths[@]}"; do
     if [[ "$search" == "no" && -e "$project/$path" ]]; then
       echo "error: enable_ai_search=no but $path was generated" >&2
@@ -114,19 +116,14 @@ verify_variant() {
     log "[$slug] scripts/ci.sh frontend"
     bash scripts/ci.sh frontend
 
-    log "[$slug] bicep build"
-    if [[ -n "${CI:-}" ]] && command -v az >/dev/null 2>&1 && ! az bicep version >/dev/null 2>&1; then
-      az bicep install
-    fi
-    if command -v az >/dev/null 2>&1 && az bicep version >/dev/null 2>&1; then
-      while IFS= read -r -d '' file; do
-        az bicep build --only-show-errors --file "$file" --stdout >/dev/null
-      done < <(find infra/bicep -name '*.bicep' -print0)
+    log "[$slug] scripts/ci.sh infra"
+    if command -v terraform >/dev/null 2>&1; then
+      bash scripts/ci.sh infra
     elif [[ -n "${CI:-}" ]]; then
-      echo "error: az bicep is required in CI" >&2
+      echo "error: terraform is required in CI" >&2
       return 1
     else
-      echo "skipped: az bicep is not available"
+      echo "skipped: terraform is not available"
     fi
 
     log "[$slug] docker compose config"

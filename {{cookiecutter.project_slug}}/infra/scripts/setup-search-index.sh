@@ -12,27 +12,25 @@ the index (with an Azure OpenAI vectorizer for queries), the skillset (chunking
 and Azure OpenAI embeddings), and the indexer. Safe to re-run.
 
 Usage:
-  setup-search-index.sh --resource-group <name> --aoai-endpoint <url> \
-    --embedding-deployment <name> [options]
+  setup-search-index.sh --aoai-endpoint <url> --embedding-deployment <name> [options]
 
 Options:
-  -g, --resource-group <name>        Resource group (used to locate the state file)
+  -e, --environment <name>           Terraform env root to read outputs from (default: dev)
       --aoai-endpoint <url>          UNC Azure OpenAI endpoint (or AZURE_AI_FOUNDRY_ENDPOINT)
       --embedding-deployment <name>  Embedding deployment name
                                      (or AZURE_AI_FOUNDRY_EMBEDDING_DEPLOYMENT_NAME)
       --embedding-model <name>       Model behind that deployment (default: text-embedding-3-small)
       --dimensions <n>               Vector dimensions for that model (default: 1536)
       --index <name>                 Index name; must match AZURE_SEARCH_INDEX (default: documents)
-      --search-name <name>           Search service (default: state search.searchName)
-      --storage-account-id <id>      Storage account resource id (default: state search.storageAccountId)
-      --container <name>             Documents container (default: state search.documentsContainerName)
+      --search-name <name>           Search service (default: Terraform output search.name)
+      --storage-account-id <id>      Storage account resource id (default: output storage_account_id)
+      --container <name>             Documents container (default: output search.documents_container_name)
       --run                          Run the indexer now instead of waiting for its hourly schedule
-  -s, --state-file <path>            Local state file path (default: infra/state/<rg>.json)
   -h, --help                         Show this help text
 
 Prerequisites (docs/rag.md):
   - you hold "Search Service Contributor" on the search service;
-  - the search service's identity (deploy-search.sh output searchPrincipalId) holds
+  - the search service's identity (Terraform output search.principal_id) holds
     "Cognitive Services OpenAI User" on UNC's Azure OpenAI resource.
 USAGE
 }
@@ -40,7 +38,7 @@ USAGE
 API_VERSION="2026-04-01"
 DEFINITIONS="$SCRIPT_DIR/../search"
 
-RESOURCE_GROUP=""
+ENVIRONMENT_NAME="dev"
 AOAI_ENDPOINT="${AZURE_AI_FOUNDRY_ENDPOINT:-}"
 EMBEDDING_DEPLOYMENT="${AZURE_AI_FOUNDRY_EMBEDDING_DEPLOYMENT_NAME:-}"
 EMBEDDING_MODEL="text-embedding-3-small"
@@ -50,11 +48,10 @@ SEARCH_NAME=""
 STORAGE_ACCOUNT_ID=""
 CONTAINER=""
 RUN_NOW="false"
-STATE_FILE=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    -g|--resource-group) RESOURCE_GROUP="$2"; shift 2 ;;
+    -e|--environment) ENVIRONMENT_NAME="$2"; shift 2 ;;
     --aoai-endpoint) AOAI_ENDPOINT="$2"; shift 2 ;;
     --embedding-deployment) EMBEDDING_DEPLOYMENT="$2"; shift 2 ;;
     --embedding-model) EMBEDDING_MODEL="$2"; shift 2 ;;
@@ -64,14 +61,13 @@ while [[ $# -gt 0 ]]; do
     --storage-account-id) STORAGE_ACCOUNT_ID="$2"; shift 2 ;;
     --container) CONTAINER="$2"; shift 2 ;;
     --run) RUN_NOW="true"; shift ;;
-    -s|--state-file) STATE_FILE="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "error: unknown argument: $1" >&2; usage; exit 1 ;;
   esac
 done
 
-if [[ -z "$RESOURCE_GROUP" || -z "$AOAI_ENDPOINT" || -z "$EMBEDDING_DEPLOYMENT" ]]; then
-  echo "error: --resource-group, --aoai-endpoint and --embedding-deployment are required" >&2
+if [[ -z "$AOAI_ENDPOINT" || -z "$EMBEDDING_DEPLOYMENT" ]]; then
+  echo "error: --aoai-endpoint and --embedding-deployment are required" >&2
   usage
   exit 1
 fi
@@ -83,14 +79,13 @@ fi
 require_command az
 require_command jq
 
-if [[ -z "$STATE_FILE" ]]; then
-  STATE_FILE="$(default_state_file "$SCRIPT_DIR" "$RESOURCE_GROUP")"
+if [[ -z "$SEARCH_NAME" || -z "$STORAGE_ACCOUNT_ID" || -z "$CONTAINER" ]]; then
+  require_command terraform
+  OUTPUTS="$(terraform_outputs "envs/$ENVIRONMENT_NAME")"
+  SEARCH_NAME="${SEARCH_NAME:-$(output_value "$OUTPUTS" .search.name)}"
+  STORAGE_ACCOUNT_ID="${STORAGE_ACCOUNT_ID:-$(output_value "$OUTPUTS" .storage_account_id)}"
+  CONTAINER="${CONTAINER:-$(output_value "$OUTPUTS" .search.documents_container_name)}"
 fi
-ensure_state_file "$STATE_FILE"
-
-SEARCH_NAME="$(resolve_required_value "$SEARCH_NAME" "$STATE_FILE" '.services.search.searchName' '--search-name')"
-STORAGE_ACCOUNT_ID="$(resolve_required_value "$STORAGE_ACCOUNT_ID" "$STATE_FILE" '.services.search.storageAccountId' '--storage-account-id')"
-CONTAINER="$(resolve_required_value "$CONTAINER" "$STATE_FILE" '.services.search.documentsContainerName' '--container')"
 ENDPOINT="https://${SEARCH_NAME}.search.windows.net"
 AOAI_ENDPOINT="${AOAI_ENDPOINT%/}"
 

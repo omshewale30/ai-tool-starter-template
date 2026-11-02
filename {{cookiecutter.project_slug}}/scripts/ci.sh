@@ -4,6 +4,7 @@
 #
 #   bash scripts/ci.sh backend
 #   bash scripts/ci.sh frontend
+#   bash scripts/ci.sh infra
 #
 # Contract (FO-AI/automation): no cloud access, no secrets, dependencies are
 # installed by the caller. Test-only settings are set here so a check behaves
@@ -49,11 +50,24 @@ check_frontend() {
   )
 }
 
+# Terraform: formatting, and every root validated offline (no backend, no Azure
+# sign-in). Providers come from the registry, pinned by each root's lock file.
+check_infra() {
+  terraform fmt -check -recursive infra/terraform
+  for root in infra/terraform/bootstrap infra/terraform/envs/*/; do
+    root="${root%/}"
+    echo "terraform validate: $root"
+    terraform -chdir="$root" init -backend=false -input=false -lockfile=readonly >/dev/null
+    terraform -chdir="$root" validate
+  done
+}
+
 case "${1:-}" in
   backend) check_backend ;;
   frontend) check_frontend ;;
+  infra) check_infra ;;
   *)
-    echo "usage: $0 {backend|frontend}" >&2
+    echo "usage: $0 {backend|frontend|infra}" >&2
     exit 2
     ;;
 esac

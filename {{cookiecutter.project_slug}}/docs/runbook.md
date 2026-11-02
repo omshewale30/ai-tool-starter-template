@@ -1,26 +1,28 @@
 # Runbook
 
-First-time setup of an Azure environment, then day-to-day operations. Resources are
-created once by hand with `infra/scripts/deploy-*.sh`; every later release is the CD
-workflow. Only a `dev` environment is wired up ([adding prod](#adding-a-production-environment)).
+First-time setup of an Azure environment, then day-to-day operations. Infrastructure
+is Terraform in `infra/terraform` ([layout](../infra/terraform/README.md)), applied by
+an operator; every release is the CD workflow, which never provisions. CD is wired up
+for `dev` only ([adding prod](#adding-a-production-environment)).
 
 ## 0. Prerequisites
 
-- Azure CLI (`az login`), `jq`, and the GitHub CLI (`gh auth login`).
-- A resource group, and **Owner** (or Contributor + User Access Administrator) on it:
-  the scripts create role assignments. Owner grants no access to Key Vault *contents*
-  (RBAC vault); `deploy-key-vault.sh` grants you **Key Vault Secrets Officer** so you
-  can seed `database-url` (it can take a few minutes to apply; the scripts wait).
+- Terraform ≥ 1.11 (`brew install terraform`), Azure CLI (`az login`), `jq`, and the
+  GitHub CLI (`gh auth login`).
+- **Owner** (or Contributor + User Access Administrator) on the subscription:
+  Terraform creates resource groups and role assignments. Owner grants no access to
+  Key Vault *contents* or state blobs; Terraform grants whoever runs it **Key Vault
+  Secrets Officer** and **Storage Blob Data Contributor** on the state account, and
+  waits for the grants to apply.
 - The GitHub repository for this project, ideally in the `FO-AI` organization.
 
 ```bash
-export RG=rg-{{ cookiecutter.resource_prefix }}-dev
-az group create -n "$RG" -l {{ cookiecutter.azure_location }}   # if it doesn't exist
+az account set --subscription <subscription id>
+export ARM_SUBSCRIPTION_ID="$(az account show --query id -o tsv)"   # every Terraform run
 ```
 
-Every script takes `-g <resource-group>` and remembers its outputs in
-`infra/state/<resource-group>.json` (git-ignored), so later scripts find earlier
-resources without arguments. `-h` prints each script's options.
+Terraform signs in with your `az login`. Each root under `infra/terraform` keeps its
+state in the bootstrap storage account; `terraform output` in a root prints its values.
 
 ## 1. App registrations
 
@@ -60,53 +62,69 @@ take the form `repo:<org>@<org-id>/<repo>@<repo-id>:ref:refs/heads/main` (and
 "no matching federated identity" error. Copy the exact subject from that error if
 unsure.
 
-Roles: **Contributor** on the resource group (container app updates). AcrPush and
-Key Vault Secrets Officer are granted by the scripts below when you pass its
-**object id** as `DEPLOY_PRINCIPAL_ID`.
+Roles are granted by Terraform once you set its **object id** (the service
+principal's, not the app registration's) as `deploy_principal_id` in
+`infra/terraform/envs/shared/terraform.tfvars` (AcrPush and Contributor on the registry,
+for `az acr build`) and in each
+`envs/<env>/terraform.tfvars` (Contributor on the resource group for container app
+updates, Key Vault Secrets Officer for `database-url`).
 
 ```bash
-export DEPLOY_PRINCIPAL_ID=<object id of the CI/CD service principal>
-az role assignment create --assignee-object-id "$DEPLOY_PRINCIPAL_ID" \
-  --assignee-principal-type ServicePrincipal --role Contributor \
-  --scope "$(az group show -n "$RG" --query id -o tsv)"
+az ad sp show --id <CI/CD app client id> --query id -o tsv
 ```
 
-## 3. Azure resources (once, in order)
+## 3. Azure resources (Terraform)
+
+If more than one person will run Terraform, create an Entra group for them first and
+set it as `state_contributor_principal_ids` (bootstrap) and `operator_principal_ids`
+(each env); otherwise access follows whoever applied last.
+
+Once per subscription, the state backend (local state; also registers the resource
+providers the stack uses):
 
 ```bash
-cd infra/scripts
-./deploy-identity.sh -g "$RG"            # user-assigned identity for both apps
-./deploy-observability.sh -g "$RG"       # Log Analytics + Application Insights
-./deploy-registry.sh -g "$RG"            # ACR (AcrPull for apps, AcrPush for CI/CD)
-./deploy-storage.sh -g "$RG"             # Blob storage
-PG_ADMIN_PASSWORD=<16+ letters/digits> ./deploy-postgres.sh -g "$RG"
-./deploy-key-vault.sh -g "$RG"           # seeds App Insights string; grants you secret access
-{%- if cookiecutter.enable_ai_search == "yes" %}
-./deploy-search.sh -g "$RG"              # optional now; see docs/rag.md
-{%- endif %}
-./deploy-container-apps-env.sh -g "$RG"
-DATABASE_URL='postgresql+psycopg://<login>:<password>@<server>.postgres.database.azure.com:5432/appdb?sslmode=require' \
-  ./deploy-api-app.sh -g "$RG"            # internal ingress; seeds Key Vault database-url
-./deploy-web-app.sh -g "$RG"              # public ingress; prints the web URL
+cd infra/terraform/bootstrap
+terraform init && terraform apply
+terraform output -raw backend_config > ../backend.hcl   # commit backend.hcl
 ```
 
-The apps start on a placeholder image. They get real images from the first CD run.
-Re-running `deploy-api-app.sh`/`deploy-web-app.sh` is refused once an app exists
-(CD owns image and env from then on); pass `--recreate` only if you mean it.
+Then the shared registry, then each environment (`make tf-init tf-plan tf-apply
+ENV=<root>` does the same from the repo root):
+
+```bash
+cd ../envs/shared
+terraform init -backend-config=../../backend.hcl
+terraform plan -out=tfplan && terraform apply tfplan      # ACR
+
+cd ../dev
+terraform init -backend-config=../../backend.hcl
+terraform plan -out=tfplan && terraform apply tfplan      # everything else (~10 min)
+```
+
+`envs/dev` creates the resource group, managed identity, Log Analytics + Application
+Insights, Key Vault, Storage, PostgreSQL{% if cookiecutter.enable_ai_search == "yes" %}, AI Search{% endif %},
+the Container Apps environment, and both apps. Terraform generates the Postgres admin
+password (it never enters state) and stores it in Key Vault as `postgres-admin-password`,
+along with a ready `database-url`.
+
+The apps start on a placeholder image and get real images from the first CD run.
+From then on CD owns their image and env: Terraform ignores both, so re-applying is
+always safe. Change everything else (scale, probes, secrets, ingress) in Terraform.
 
 Then:
-- add `<web url>/auth` to the web app registration's SPA redirect URIs;
+- add `<web url>/auth` (`terraform output web_url`) to the web app registration's SPA
+  redirect URIs;
 - request **Cognitive Services OpenAI User** on UNC's Azure OpenAI for the app
-  identity (`identity.principalId` in the state file); see [ai.md](ai.md).
+  identity (`terraform output identity`, `principal_id`); see [ai.md](ai.md).
 
 ## 4. GitHub configuration
 
 ```bash
-./print-github-settings.sh -g "$RG" --pipeline-client-id <CI/CD app client id>
+infra/scripts/print-github-settings.sh --environment dev --pipeline-client-id <CI/CD app client id>
 ```
 
-prints every `gh variable set` / `gh secret set` command, filled in from the state
-file. Fill the `<placeholders>` and run them. Summary:
+prints every `gh variable set` / `gh secret set` command, filled in from the Terraform
+outputs. Fill the `<placeholders>` and run them. Summary:
 
 | Where | Name | Notes |
 | --- | --- | --- |
@@ -114,7 +132,7 @@ file. Fill the `<placeholders>` and run them. Summary:
 | Repository variable | `ACR_NAME` | Registry name (not the login server) |
 | `dev` variables | `RESOURCE_GROUP`, `KEY_VAULT_NAME`, `API_APP_NAME`, `WEB_APP_NAME`, `AZURE_WEB_URL`, optional `WEB_URL` (custom domain) | Deploy targets |
 | `dev` variables | `AUTH_MODE`=`entra`, `AZURE_TENANT_ID`, `ENTRA_BACKEND_CLIENT_ID`, `ENTRA_BACKEND_APP_ID_URI`, `ENTRA_CLIENT_ID`, `ENTRA_TENANT_ID`, `ENTRA_API_SCOPE`, `AZURE_AI_FOUNDRY_*`, … | Application settings; the full list is `deploy/env-contract.json` |
-| `dev` secret | `DATABASE_URL` | Written to Key Vault `database-url` on every deploy |
+| `dev` secret | `DATABASE_URL` | Copied from Key Vault `database-url` (the printed command does it); CD writes it back on every deploy |
 
 `AZURE_CLIENT_ID` the repository variable is the CI/CD identity; the API's own
 `AZURE_CLIENT_ID` (its managed identity) is set by infra and never read from GitHub.
@@ -147,11 +165,12 @@ The job summary shows the deployed digests and the outcome.
 | Roll back a bad release | Revert the commit on `main`; CD deploys the revert. (Failed deploys roll back automatically.) |
 | Remove a hand-set container env var | CD → *Run workflow* with **allow-prune** |
 | Change a setting | Update the GitHub variable/secret, then redeploy |
-| Rotate the DB password | Change it on the server, update the `DATABASE_URL` secret, redeploy |
-| API logs | `az containerapp logs show -g $RG -n <api app> --follow` |
+| Rotate the DB password | Bump `postgres_password_version` in the env's tfvars and apply; copy the new `database-url` to the `DATABASE_URL` secret (step 4's command); redeploy |
+| API logs | `az containerapp logs show -g rg-{{ cookiecutter.resource_prefix }}-dev -n <api app> --follow` |
 | Traces, failures, AI usage | Application Insights → *Transaction search*, *Failures*; spans named `ai.*` carry token usage |
 | Who did what | `/admin` in the app (audit events) |
-| Scale | `minReplicas`/`maxReplicas`, `cpu`, `memory` in `infra/bicep/services/*-app.bicep`, then `--recreate` and redeploy |
+| Scale / size | `apps`, `postgres_sku_name`, … in `infra/terraform/envs/<env>/terraform.tfvars`, then plan and apply (no redeploy needed) |
+| Infra drift check | `make tf-plan ENV=dev` should show no changes |
 
 Useful Log Analytics query (AI calls by model, last day):
 
@@ -170,9 +189,11 @@ AppDependencies
 | `publish`: "Set AZURE_TENANT_ID as a repository or organization variable" | Repository variables missing (environment ones aren't visible to `publish`) |
 | `azure/login`: no matching federated identity | Subject mismatch; see the immutable-claims note in step 2 |
 | CD: "would be removed: X" | A variable on the app isn't in the contract; add it, or run CD with allow-prune |
-| `deploy-api-app.sh`: "no data access to Key Vault" | Re-run `deploy-key-vault.sh` signed in as yourself (or pass `--operator-principal-id`), wait a minute, retry |
-| CD: "the app declares no secret database-url" | API app created without the Key Vault reference; `deploy-api-app.sh --recreate` |
-| CD: "must have internal ingress" | API app exposed publicly; recreate it with `deploy-api-app.sh --recreate` |
+| `terraform init`: 403 on the state blob | You lack Storage Blob Data Contributor on the state account. Join the operators group set in `bootstrap/terraform.tfvars`, or have an Owner grant you the role on it |
+| `terraform apply`: 403 from Key Vault | Role assignment still propagating; re-run apply |
+| `terraform apply`: "MissingSubscriptionRegistration" | Provider not registered; apply `infra/terraform/bootstrap` (it registers them) |
+| CD: "the app declares no secret database-url" | API app changed outside Terraform; `terraform apply` in `envs/<env>` restores it |
+| CD: "must have internal ingress" | API ingress changed outside Terraform; `terraform apply` restores it |
 | Site health: `auth.configured == true` failed | `AZURE_TENANT_ID` / `ENTRA_BACKEND_*` not set in `dev` |
 | Site health: `ai.configured == true` failed | `AZURE_AI_FOUNDRY_ENDPOINT` / `..._DEPLOYMENT_NAME` not set |
 | Every API call 401 after sign-in | API registration issues v1 tokens (`requestedAccessTokenVersion` must be 2) or audience mismatch |
@@ -182,10 +203,15 @@ AppDependencies
 
 ## Adding a production environment
 
-1. Create a separate resource group and repeat steps 3–4 with `-e prod` and a
-   `prod` GitHub environment (with required reviewers).
-2. Add a federated credential for `environment:prod`.
-3. Add a second job to `.github/workflows/cd.yml` that calls the same reusable
+`infra/terraform/envs/prod` already exists, sized for production in its
+`terraform.tfvars` (General Purpose Postgres with geo-redundant backup, ZRS storage,
+two replicas per app, Key Vault purge protection). Review it, then:
+
+1. `make tf-init tf-plan tf-apply ENV=prod`; it pulls from the same shared registry.
+2. Create a `prod` GitHub environment (with required reviewers) and run
+   `print-github-settings.sh --environment prod`.
+3. Add a federated credential for `environment:prod`.
+4. Add a second job to `.github/workflows/cd.yml` that calls the same reusable
    workflow with `environment: prod`, `needs: deploy`, so it promotes the digests
    `dev` just verified. First parameterize `scripts/cd.sh`, which currently
    hard-codes `dev` (the `ENVIRONMENT` it sets and the health check that expects it),

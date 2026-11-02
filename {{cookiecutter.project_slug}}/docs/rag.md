@@ -39,19 +39,15 @@ Pipeline definitions: `infra/search/*.json`.
 Prerequisites: the base infrastructure from [runbook.md](runbook.md) (identity, storage,
 Key Vault, container apps) and an embedding deployment on UNC's Azure OpenAI resource.
 
-1. **Create the search service** (also creates the `documents` container and lets the
-   indexer read it):
-
-   ```bash
-   infra/scripts/deploy-search.sh -g <resource-group>
-   ```
-
-   Note the `searchPrincipalId` output.
+1. **The search service** is part of every environment's Terraform
+   (`infra/terraform/modules/search`, applied with `envs/<env>`). It also creates the
+   `documents` container and lets the indexer read it. Note `principal_id` in
+   `terraform output search`.
 
 2. **Hand-off to UNC (Azure OpenAI owners).** Ask them to grant **Cognitive Services
    OpenAI User** on the Azure OpenAI resource to:
-   - the search service identity (`searchPrincipalId`), which embeds chunks and queries;
-   - the app's managed identity (`identity.principalId` in your state file), which
+   - the search service identity (`search.principal_id`), which embeds chunks and queries;
+   - the app's managed identity (`terraform output identity`, `principal_id`), which
      calls the chat model (needed for the base app too).
 
    Include the embedding deployment name and model (e.g. `text-embedding-3-small`).
@@ -59,7 +55,7 @@ Key Vault, container apps) and an embedding deployment on UNC's Azure OpenAI res
 3. **Create the pipeline** (needs *Search Service Contributor* on the service for you):
 
    ```bash
-   infra/scripts/setup-search-index.sh -g <resource-group> \
+   infra/scripts/setup-search-index.sh --environment dev \
      --aoai-endpoint https://<unc-resource>.openai.azure.com \
      --embedding-deployment <deployment> --embedding-model text-embedding-3-small \
      --dimensions 1536 --run
